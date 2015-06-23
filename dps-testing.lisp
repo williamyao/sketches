@@ -75,3 +75,4 @@
                                             (effects target)
                                             :key #'type)))
            (/ amt (1+ (/ (armor target) 100.0)))))
+    
