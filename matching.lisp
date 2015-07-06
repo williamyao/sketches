@@ -111,12 +111,14 @@
      append (gen-match-bindings `(slot-value ,place ',slot) valplace)))
 
 (defmacro match (place &body clauses)
-  `(cond
-     ,@(loop for (spec clause) on clauses by #'cddr
-	  collect (compile-match-clause (gen-match-conditions place spec)
-					(gen-match-bindings place spec)
-					clause))
-     (t (error "Fell through match case: ~s" ,place))))
+  (let ((place-sym (gensym "PLACE")))
+    `(let ((,place-sym ,place))
+       (cond
+	 ,@(loop for (spec clause) on clauses by #'cddr
+	      collect (compile-match-clause (gen-match-conditions place-sym spec)
+					    (gen-match-bindings place-sym spec)
+					    clause))
+	 (t (error "Fell through match case: ~s" ,place-sym))))))
 
 ;; example usage: defining recursive append
 
