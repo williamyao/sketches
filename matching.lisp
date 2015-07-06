@@ -122,5 +122,5 @@
 
 (defun append* (l1 l2)
   (match l1
-    (cons head tail) (cons head (append tail l2))
+    (cons head tail) (cons head (append* tail l2))
     ()               l2))
