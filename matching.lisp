@@ -125,7 +125,8 @@
 	    append (gen-match-conditions `(nth ,i ,place) valplace))))
 
 (defmethod gen-list-match-conditions (place (designator (eql 'vector)) values)
-  (consn `(= (length ,place) ,(length values))
+  (consn `(vectorp ,place)
+	 `(= (length ,place) ,(length values))
 	 (loop for valplace in values
 	    for i upfrom 0
 	    append (gen-match-conditions `(aref ,place ,i) valplace))))
