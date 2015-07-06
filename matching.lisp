@@ -181,7 +181,7 @@
 (defun group (list n)
   (when (not (zerop n))
     (do ((list list (drop list n))
-	 (acc  ()   (cons (take list n) acc)))
+	 (acc  '()  (cons (take list n) acc)))
 	((null list) (nreverse acc)))))
 
 (defun haslength (list n)
