@@ -73,6 +73,7 @@
 					    clause))
 	 (t (error "Fell through match case: ~s" ,place-sym))))))
 
+
 ;;; To figure out which branch to take, MATCH turns each specification into a
 ;;; list of conditions that must be met for the branch to be chosen, and a
 ;;; list of variable bindings to effect if the branch is chosen.
@@ -165,9 +166,11 @@
      append (gen-match-bindings `(aref ,place ,i) valplace)))
 
 (defmethod gen-list-match-bindings (place designator values)
+  (declare (ignore designator))
   (loop for (slot valplace) on values by #'cddr
      append (gen-match-bindings `(slot-value ,place ',slot) valplace)))
 
+
 ;;; utilities
 
 (declaim (inline drop take))
