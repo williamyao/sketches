@@ -165,6 +165,7 @@
      append (gen-match-bindings `(aref ,place ,i) valplace)))
 
 (defmethod gen-list-match-bindings (place designator values)
+  (declare (ignore designator))
   (loop for (slot valplace) on values by #'cddr
      append (gen-match-bindings `(slot-value ,place ',slot) valplace)))
 
