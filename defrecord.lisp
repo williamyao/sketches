@@ -1,7 +1,37 @@
+#|
+ Macro for defining a record type.
+
+ William Yao (c) 2015
+|#
+
 (defclass record () ()
   (:documentation "Base type for all classes defined with DEFRECORD."))
 
 (defmacro defrecord (name (&rest superrecords) &rest slots)
+
+  "Defines a Record Type.
+
+   Most classes are just lists of accessors, initargs, and initforms.
+   DEFRECORD serves to abstract this and make it a little simpler.
+   Consider:
+
+   (defrecord dog () 
+     breed (age 0) name (alive? t))
+
+   versus
+
+   (defclass dog ()
+     ((breed  :accessor breed  :initarg :breed  :initform nil)
+      (age    :accessor age    :initarg :age    :initform 0)
+      (name   :accessor name   :initarg :name   :initform nil)
+      (alive? :accessor alive? :initarg :alive? :initform t)))
+
+   Essentially: As concise as DEFSTRUCT, but hooks into the same
+   inheritance and generic function machinery that DEFCLASS does.
+
+   Also defines an automatic shallow copy COPY-RECORD on the newly
+   defined record type, which copies all superclass slots as well."
+  
   (destructuring-bind (slot-names default-vals)
       (transpose (map 'list #'normalize-slot slots))
     
