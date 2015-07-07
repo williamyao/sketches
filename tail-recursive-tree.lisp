@@ -1,0 +1,8 @@
+(defun invert (tree c)
+  (if (consp tree)
+      (invert (car tree)
+	      (lambda (tree*)
+		(invert (cdr tree)
+			(lambda (tree**)
+			  (funcall c (cons tree** tree*))))))
+      (funcall c tree)))
