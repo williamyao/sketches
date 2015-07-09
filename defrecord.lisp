@@ -7,7 +7,7 @@
 (defclass record () ()
   (:documentation "Base type for all classes defined with DEFRECORD."))
 
-(defmacro defrecord (name (&rest superrecords) &rest slots)
+(defmacro defrecord (name (&rest superrecords) &body slots)
 
   "Defines a Record Type.
 
