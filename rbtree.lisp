@@ -19,24 +19,24 @@
 		 :data data))
 
 (defun %rb-insert (tree key data)
-   (with-slots (root sortfn) tree
-     (let ((new-node (%new-rbnode key data)))
-       (letrec
-	   (node)
-	   (with-slots (left right (key* key)) node
-	     (cond ((funcall sortfn key key*)
-		    (if left
-			(recurse left)
-			(progn (setf (parent new-node) node)
-			       (setf left new-node))))
-		   ((funcall sortfn key* key)
-		    (if right
-			(recurse right)
-			(progn (setf (parent new-node) node)
-			       (setf right new-node))))
-		   (t (setf (data node) data)
-		      :do-not-restructure)))
-	 (recurse root)))))
+  (with-slots (root sortfn) tree
+    (let ((new-node (%new-rbnode key data)))
+      (letrec
+	  (node)
+	  (with-slots (left right (key* key)) node
+	    (cond ((funcall sortfn key key*)
+		   (if left
+		       (recurse left)
+		       (progn (setf (parent new-node) node)
+			      (setf left new-node))))
+		  ((funcall sortfn key* key)
+		   (if right
+		       (recurse right)
+		       (progn (setf (parent new-node) node)
+			      (setf right new-node))))
+		  (t (setf (data node) data)
+		     :do-not-restructure)))
+	(recurse root)))))
   
 (defun %left-rotate (root)
   (let ((pivot (right root)))
