@@ -1,3 +1,5 @@
+(require :optima)
+
 (defrecord rbnode () (color :red) key data left right)
 (defrecord rbtree () root sortfn)
 
@@ -31,3 +33,7 @@
 		       (t (values data t))))
 		   (values default nil))))
       (rb-find* root))))
+
+(defun rebalance (root)
+  (optima:match root
+    ))
