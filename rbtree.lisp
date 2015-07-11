@@ -34,6 +34,32 @@
 		   (values default nil))))
       (rb-find* root))))
 
-(defun rebalance (root)
+(optima:defpattern rbnode (color key data left right)
+  `(class rbnode :color ,color :key ,key :data ,data :left ,left :right ,right))
+
+(defun %balance (root)
   (optima:match root
-    ))
+    ((or (rbnode :black z z* (rbnode :red y y* (rbnode :red x x* a b) c) d)
+	 (rbnode :black z z* (rbnode :red x x* a (rbnode :red y y* b c)) d)
+	 (rbnode :black x x* a (rbnode :red y y* b (rbnode :red z z* c d)))
+	 (rbnode :black x x* a (rbnode :red z z* (rbnode :red y y* b c) d)))
+     (rbnode :red y y* (rbnode :black x x* a b) (rbnode :black z z* c d)))
+    (_ root)))
+
+(defun rb-insert (tree key data)
+  (with-slots (root sortfn) tree
+    (labels ((rb-insert* (node)
+	       (if node
+		   (with-slots (color (key* key) (data* data) left right) node
+		     (cond
+		       ((funcall sortfn key key*)
+			(%balance (rbnode color key* data* (rb-insert* left) right)))
+		       ((funcall sortfn key* key)
+			(%balance (rbnode color key* data* left (rb-insert* right))))
+		       (t (rbnode color key data left right))))
+		   (rbnode :red key data nil nil))))
+      (setf (root tree)
+	    (optima:match (rb-insert* (root tree))
+	      ((rbnode :red key data left right)
+	       (rbnode :black key data left right))
+	      (other other))))))
