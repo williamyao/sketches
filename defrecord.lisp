@@ -52,6 +52,12 @@
 	   (let ((copy (make-instance ',name)))
 	     (%copy-record record copy)
 	     copy))
+	 (defun ,name ,(map 'list #'intern slot-names)
+	   (make-instance ',name
+			  ,@(mapcan (lambda (slot-name)
+				      `(,(intern slot-name :keyword)
+					 ,(intern slot-name)))
+				    slot-names)))
 	 ',name))))
 
 (defun transpose (list)
