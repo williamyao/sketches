@@ -1,3 +1,7 @@
+#|
+ Implementation of red-black trees.
+|#
+
 (require :optima)
 
 (defrecord rbnode () (color :red) key data left right)
@@ -63,3 +67,4 @@
 	      ((rbnode :red key data left right)
 	       (rbnode :black key data left right))
 	      (other other))))))
+
