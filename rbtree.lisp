@@ -57,9 +57,13 @@
 		   (with-slots (color (key* key) (data* data) left right) node
 		     (cond
 		       ((funcall sortfn key key*)
-			(%balance (rbnode color key* data* (rb-insert* left) right)))
+			(%balance (rbnode color key* data*
+					  (rb-insert* left)
+					  right)))
 		       ((funcall sortfn key* key)
-			(%balance (rbnode color key* data* left (rb-insert* right))))
+			(%balance (rbnode color key* data*
+					  left
+					  (rb-insert* right))))
 		       (t (rbnode color key data left right))))
 		   (rbnode :red key data nil nil))))
       (setf (root tree)
