@@ -26,17 +26,16 @@
 
 ;;;-----
 
+(defun %node-find (node key sortfn default)
+  (if node
+      (with-slots ((key* key) data left right) node
+	(cond ((funcall sortfn key key*) (%node-find left key sortfn default))
+	      ((funcall sortfn key* key) (%node-find right key sortfn default))
+	      (t (values data t))))
+      (values default nil)))
+
 (defun rb-find (rbtree key &optional default)
-  (with-slots (root sortfn) rbtree
-    (labels ((rb-find* (node)
-	       (if node
-		   (with-slots ((key* key) data left right) node
-		     (cond
-		       ((funcall sortfn key key*) (rb-find* left))
-		       ((funcall sortfn key* key) (rb-find* right))
-		       (t (values data t))))
-		   (values default nil))))
-      (rb-find* root))))
+  (%node-find (root rbtree) key (sortfn rbtree) default))
 
 (optima:defpattern rbnode (color key data left right)
   `(class rbnode :color ,color :key ,key :data ,data :left ,left :right ,right))
@@ -50,25 +49,23 @@
      (rbnode :red y y* (rbnode :black x x* a b) (rbnode :black z z* c d)))
     (_ root)))
 
+(defun %node-insert (node key data sortfn)
+  (if node
+      (with-slots (color (key* key) (data* data) left right) node
+	(cond ((funcall sortfn key key*)
+	       (%balance (rbnode color key* data*
+				 (%node-insert left key data sortfn) right)))
+	      ((funcall sortfn key* key)
+	       (%balance (rbnode color key* data*
+				 left (%node-insert right key data sortfn))))
+	      (t (rbnode color key data left right))))
+      (rbnode :red key data nil nil)))
+
 (defun rb-insert (tree key data)
   (with-slots (root sortfn) tree
-    (labels ((rb-insert* (node)
-	       (if node
-		   (with-slots (color (key* key) (data* data) left right) node
-		     (cond
-		       ((funcall sortfn key key*)
-			(%balance (rbnode color key* data*
-					  (rb-insert* left)
-					  right)))
-		       ((funcall sortfn key* key)
-			(%balance (rbnode color key* data*
-					  left
-					  (rb-insert* right))))
-		       (t (rbnode color key data left right))))
-		   (rbnode :red key data nil nil))))
-      (setf (root tree)
-	    (optima:match (rb-insert* (root tree))
-	      ((rbnode :red key data left right)
-	       (rbnode :black key data left right))
-	      (other other))))))
+    (setf (root tree)
+	  (optima:match (%node-insert root key data sortfn)
+	    ((rbnode :red key data left right)
+	     (rbnode :black key data left right))
+	    (other other)))))
 
