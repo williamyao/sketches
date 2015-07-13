@@ -24,8 +24,6 @@
     (error "Color must be either RED or BLACK.")))
 
 
-;;;-----
-
 (defun %node-find (node key sortfn default)
   "Return the data associated with the given key."
   (if node
@@ -86,4 +84,3 @@ Returns a freshly created tree."
 	       (rbnode :black key data left right))
 	      (other other))
 	    sortfn)))
-

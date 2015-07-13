@@ -133,4 +133,3 @@
 		      :key #'cdr)))
     (values (caar scores)
 	    scores)))
-
