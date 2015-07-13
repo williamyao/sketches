@@ -341,3 +341,81 @@ Supply a documentation string when defining top-level functions, types, classes,
 
 For functions, the docstring should describe the function's contract: what the function does, what the arguments mean, what values are returned, what conditions the function can signal. It should be expressed at the appropriate level of abstraction, explaining the intended meaning rather than, say, just the syntax. In documentation strings, capitalize the names of Lisp symbols, such as function arguments. For example, "The value of LENGTH should be an integer."
 
+```
+(defun small-prime-number-p (n)
+  "Return T if N, an integer, is a prime number. Otherwise, return NIL."
+  (cond ((or (< n 2))
+         nil)
+        ((= n 2)
+	 t)
+	(t
+	 (loop for i from 3 upto (sqrt n) by 2
+	       never (divisorp i n)))))
+
+(defgeneric table-clear (table)
+  (:documentation
+    "Like clrhash, empties the TABLE of all
+    associations, and returns the table itself."))
+```
+
+A long docstring may usefully begin with a short, single-sentence summary, followed by the larger body of the docstring.
+
+When the name of a type is used, the symbol may be quoted by surrounding it with a back quote at the beginning and a single quote at the end. Emacs will highlight the type, and the highlighting serves as a cue to the reader that M-. will lead to the symbol's definition.
+
+```
+(defun bag-tag-expected-itinerary (bag-tag)
+  "Return a list of `legacy-pnr-pax-segment' objects representing
+  the expected itinerary of the `bag-tag' object, BAG-TAG."
+  ...)
+```
+
+####Comment Semicolons
+
+You must use the appropriate number of semicolons to introduce comments.
+
+Comments are explanations to the future maintainers of the code. Even if you're the only person who will ever see and touch the code, even if you're either immortal and never going to quit, or unconcerned with what happens after you leave (and have your code self-destruct in such an eventuality), you may find it useful to comment your code. Indeed, by the time you revisit your code, weeks, months or years leater, you will find yourself a different person from the one who wrote it, and you will be grateful to that previous self for making the code readable.
+
+You must comment anything complicated so the next developer can understand what's going on. (Again, the "hit by a truck" principle.)
+
+Also use comments as a way to guide those who read the code, so they know what to find where.
+
++ File headers and important comments that apply to large sections of code in a source file should begin with four semicolons.
++ You should use three semicolons to being comments that apply to just one top-level form or small group of top-level forms.
++ Inside a top-level form, you should use two semicolons to begin a comment if it appears between lines.
++ You should use one semicolon if it is a parenthetical remark and occurs at the end of a line. You should use spaces to separate the comment from the code it refers to so the comment stands out. You should try to vertically align consecutive related end-of-line comments.
+
+```
+;;;; project-euler.lisp
+;;;; File-level comments or comments for large sections of code.
+
+;;; Problems are described in more detail here:  http://projecteuler.net/
+
+;;; Divisibility
+;;; Comments that describe a group of definitions.
+
+(defun divisorp (d n)
+  (zerop (mod n d)))
+
+(defun proper-divisors (n)
+  ...)
+
+(defun divisors (n)
+  (cons n (proper-divisors n)))
+
+;;; Prime numbers
+
+(defun small-prime-number-p (n)
+  "Return T if N, an integer, is a prime number. Otherwise, return NIL."
+  (cond ((or (< n 2))
+         nil)
+        ((= n 2)   ; parenthetical remark here
+	 t)        ; continuation of the remark
+	((divisorp 2 n)
+	 nil)  ; different remark
+	;; Comment that applies to a section of code
+	(t
+	 (loop for i from 3 upto (sqrt n) by 2
+	       never (divisorp i n)))))
+```
+
+You should include a space between the semicolon and the text of the comment.
