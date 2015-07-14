@@ -419,3 +419,98 @@ Also use comments as a way to guide those who read the code, so they know what t
 ```
 
 You should include a space between the semicolon and the text of the comment.
+
+####Grammar and Punctuation
+
+You should punctuate documentation correctly.
+
+When a comment is a full sentence, you should capitalize the initial letter of the first word and end the comment with a period. In general, you should use correct punctuation.
+
+####Attention Required
+
+You must follow the convention of using TODO comments for code requiring special attention. For code using unobvious forms, you must include a comment.
+
+For comments requiring special attention, such as incomplete code, todo items, questions, breakage, and danger, include a TODO comment indicating the type of problem, its nature, and any notes on how it may be addressed.
+
+The comments begin with a `TODO` in all capital letters, followed by the name, e-mail address, or other identifier of the person with the best context about the problem referenced by the `TODO`. The main purpose is to have a consistent `TODO` that can be searched to find out how to get more details upon request. A `TODO` is not a commitment that the person referenced will fix the problem. Thus when you create a `TODO`, it is almost always your name that is given.
+
+When signing comments, you should use your username (for code within the company) or full email address (for code visible outside the company), not just initials.
+
+```
+;;--- TODO(george@gmail.com): Refactor to provide a better API.
+
+Be spsecific when indicating times or software released in a TODO comment and use YYYY-MM-DD format for dates to make automated processing of such dates easier, e.g., 2038-01-20 for the end of the 32-bit signed `time_t`.
+
+```
+;;---(brown): Remove this code after release 1.7 or before 2012-11-30.
+```
+
+For code that uses unobvious forms to accomplish a task, you must include a comment stating the purpose of the form and the task it accomplishes.
+
+####Domain-Specific Languages
+
+You should document DLSs and any terse program written in a DSL.
+
+You must design your Domain Specific Language to be easy to read and understand by people familiar with the domain.
+
+You must properly document all your Domain Specific Languages.
+
+Sometimes, your DSL is designed for terseness. In that case, it is important to document what each program does, it it's not painfully obvious from the context.
+
+Notably, when you use regular expressions (e.g. with the `CL-PPCRE` package), you MUST ALWAYS put in a comment (usually a two-semicolon comment on the previous line) explaining, at least basically, what the regular expression does, or what the purpose of using it is. The comment need not spell out every bit of the syntax, but it should be possible for someone to follow the logic of the code without actually parsing the regular expression.
+
+###Naming
+
+####Symbol Guidelines
+
+You should use lower case. You should follow the rules for Spelling and Abbreviations. You should follow punctuation conventions.
+
+Use lower case for all symbols. Consistently using lower case makes searching for symbol names easier and is more readable.
+
+Note that Common Lisp is case-converting, and that the `symbol-name` of your symbols will be upper case. Because of this case-converting, attempts to distinguish symbol by case are defeated, and only result in confusion. While it is possible to escape characters in symbols to force lowercase, you should not use this capability unless this is somehow necessary to interoperate with third-party software.
+
+Place hyphens between all the words in a symbol. If you can't easily say an identifier out loud, it is probably badly named.
+
+You must not use "/" or "." instead of "-" unless you have a well-documented overarching reason to, and permission from other hackers who review your proposal.
+
+See the section on Spelling and Abbreviations for guidelines on using abbreviations.
+
+```
+;; Bad
+(defvar *default-username* "Ann")
+(defvar *max-widget-cnt* 200)
+```
+
+```
+;; Better
+(defvar *default-user-name* "Ann")
+(defvar *maximum-widget-count* 200)
+```
+
+There are conventions in Common Lisp for the use of punctuation in symbols. You should not use punctuation in symbols outside these conventions.
+
+Unless the scope of the variable is very small, do not use overly short names like `i` and `zq`.
+
+####Denote Intent, not Content
+
+Name your variables according to their intent, not their content.
+
+You should name a variable according to the high-level concept that it represents, not according to the low-level implementatin details of how the concept is represented.
+
+Thus, you should avoid embedding data structure or aggregate type names, such as `list`, `array`, or `hash-table` inside variable names, unless you're writing a generic algorithm that applies to arbitrary lists, arrays, hash-tables, etc. In that case it's perfectly OK to name a variable `list` or `array`.
+
+Indeed, you should be introducing new abstract data types with `DEFCLASS` or `DEFTYPE`, whenever a new kind of intent appears for objects in your protocols. Functions that manipulate such objects generically may then use variables the name of which reflect that abstract type.
+
+For example, if a variable's value is always a row (or is either a row of `NIL`), it's good to call it `row` or `first-row` or something like that. It is alright if `row` has been `DEFTYPED` to `STRING` -- precisely because you have abstracted the detail away, and the remaining salient point is that it is a row. You should not name the variable `STRING` in this context, except possibly in low-level functions that specifically manipulate the innards of rows to provide the suitable abstraction.
+
+Be consistent. If a variable is named `row` in one function, and its value is being passed to another function, call it `row` rather than, say, `value` (this was a real case).
+
+####Global Variables and Constants
+
+Name globals according to convention.
+
+The names of global constants should start and end with plus characters.
+
+Global variable names should start and end with asterisks (also known in this context as earmuffs).
+
+In some projects, parameters that are not meant to be usually modified or bound under normal circumstances (but may be during experimentation or exceptional situations) should start (but do not end)
