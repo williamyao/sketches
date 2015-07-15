@@ -783,3 +783,20 @@ Any functions (closures) created by the macro should be named, which can be done
 If a macro call contains a form, and the macro expansion includes more than one copy of that form, the form can be evaluated more than once, and code it contains macro-expanded and compiled more than once. If someone uses the macro and calls it with a form that has side effects or that takes a long time to compute, the behavior will be undesirable (unless you're intentionally writing a control structure such as a loop). A convenient way to avoid this problem is to evaluate the form only once, and bind a (generated) variable to the result. There is a very useful macro called `ALEXANDRIA:ONCE-ONLY` that generates code to do this. See also `ALEXANDRIA:WITH-GENSYMS`, to make some temporary variables in the generated code. Note that if you follow our `CALL-WITH` style, you typically expand the code only once, as either an argument to the auxiliary function, or the body of a lambda passed to it; you therefore avoid the above complexity.
 
 When you write a macro with a body, such as `WITH-XXX` macro, even if there aren't any parameters, you should leave space for them anyway. For example, if you invent `WITH-LIGHTS-ON`, do not make the call to it look like `(defmacro with-lights-on (&body b) ...)`. Instead, do `(defmacro with-lights-on (() &body) ...)`. That way, if parameters are needed in the future, you can add them without necessarily having to change all the uses of the macro.
+
+####EVAL-WHEN
+
+When using `EVAL-WHEN`, you should almost always use all of `(:compile-toplevel :load-toplevel :execute)`.
+
+Lisp evaluation happens at serveral times, some of them interleaved. Be aware of them when writing macros. EVAL-WHEN considered harmful to your mental health.
+
+In summary of the article linked above, unless you're doing truly advanced macrology, the only valid combination in an `EVAL-WHEN` is to include all of `(eval-when (:compile-toplevel :load-toplevel :execute) ... )`
+
+You must use `(eval-when (:compile-toplevel :load-toplevel :execute) ...)` whenever you define types, classes, constants, variables, etc., that are going to be used in macros.
+
+It is usually an error to omit the `:execute`, because it prevents `LOAD`ing the source rather than the fasl. It is usually an error to omit the `:load-toplevel` (except to modify e.g. readtables and compile-time settings), because it prevents `LOAD`ing future files or interactively compiling code that depends on the effects that happen on compile-time, unless the current file was `COMPILE-FILE`d within the same Lisp session.
+
+Regarding variables, note that because macros may or may not be expanded in the same process that runs the expanded code, you must not depend on compile-time and runtime effects being either visible or invisible at the other time. There are still valid uses of variables in macros:
+
+* Some variables may hold dictionaries for some new kind of definition and other meta-data. If such meta-data is to be visible at runtime and/or in other files, you must make sure that the macro expands into code that will register the definitions to those meta-data structures at load-time, in addition to effecting the registration at compile-time. Typically, your top-level definitions expand to code that does the registration. If your code doesn't expand at the top-level, you can sometimes use `LOAD-TIME-VALUE` for good effect. In extreme cases, you may have to use `ASDF-FINALIZERS:EVAL-AT-TOPLEVEL`.
+* Some variables may hold temporary data that is only used at compile-time in the same file, and can be cleaned up at the end of the file's compilation. Some predefined examples include `*readtable*` or compiler-internal variables holding the current optimization settings. You can often manage existing and new such variables using the `:AROUND-COMPILE` hooks of `ASDF`.
