@@ -1119,3 +1119,18 @@ Be careful when using the `FORMAT` condition directive. The parameters are easy 
 
   `"Items:~#[ none~; ~S~; ~S and ~S~:;~@{~#[~; and~] ~S~^ ,~}~]."`
 
+###Optimization
+
+####Unsafe Operations
+
+You must only use faster unsafe operations when there is a clear performance need and you can document why it's correct.
+
+Common Lisp implementations often provide backdoors to compute some operations faster in an unsafe way. For instance, some libraries provide arithmetic oeprations that are designed to be used with fixnums only, and yield the correct result faster if provided proper arguments. The downside is that the result of such operations is incorrect in case of overflow, and can have undefined behavior when called with anything but fixnums.
+
+More generally, unsafe operations will yield the correct result faster than would the equivalent safe operation if the arguments satisfy some invariant such as being of the correct type and small enough; however if the arguments fail to satisfy the required invariants, then the operation may have undefined behavior, such as crashing the software, or, which is sometimes worse, silently giving wrong answers. Depending on whether the software is piloting an aircraft or other life-critical device, or whether it is accounting for large amounts of money, such undefined bheavior can kill or bankrupt people. Yet proper speed can sometimes make the difference between software that's unusably slow and software that does its job, or between software that is a net loss and software than can yield a profit.
+
+You must not define or use unsafe operations without both profiling results indicating the need for this optimization, and careful documentation explaining why it is safe to use them. Unsafe operations should be restricted to internal functions; you should carefully document how unsafe it is to use these functions with the wrong arguments. You should only use unsafe operations inside functions internal to a package and you should document the use of the declarations, since calling the functions with arguments of the wrong type can lead to undefined behavior. Use `CHECK-TYPE` in functions exported from a package to sanitize input arguments, so that internal functions are never passed illegal values.
+
+On some compilers, new unsafe operations can usually be defined by combining type declarations with an `OPTIMIZE` declaration that has sufficiently high `SPEED` and low `SAFETY`. In addition to providing more speed for production code, such declarations may be more helpful than `CHECK-TYPE` assertions for finding bugs at compile-time, on compilers that have type inference. These compilers may interpret those declarations as assertions if you switch to safer and slower optimize settings; this is good to locate a dynamic error in your code during development, but is not to be used for production code since it defeats the purpose of declarations as a performance trick.
+
+
