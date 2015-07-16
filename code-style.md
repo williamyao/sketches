@@ -1068,3 +1068,17 @@ You must not use exact comparison on floating point numbers, since the vague nat
 You must use `=` to compare numbers, unless you really mean to `0`, `0.0` and `-0.0` to compare unequal, in which case you should use `EQL`. Then again, you must not usually use exact comparison on floating point numbers.
 
 Monetary amounts should be using decial (rational) numbers to avoid the complexities and rounding errors of floating-point arithmetic. Libraries such as wu-decimal may help you; once again, if this library is not satisfactory, see above about Using Libraries and Open-Sourcing Code.
+
+####Iteration
+
+Use the appropriate form for iteration.
+
+You should use simpler forms such as `DOLIST` or `DOTIMES` instead of loop in simple cases when you're not going to use any of the `LOOP` facilities such as bindings, collection, or block return.
+
+Use the `WITH` clause of `LOOP` when it will avoid a level of nesting with `LET`. You may use `LET` if it makes it clearer to return one of the bound variables after the `LOOP`, rather than use a clumsy `FINALLY (RETURN ...)` form.
+
+In the body of a `DOTIMES`, do not set the iteration variable. (CCL will issue a compiler warning if you do.)
+
+Most systems use unadorned symbols in the current package as `LOOP` keywords. Other systems use actual `:keywords` from the `KEYWORD` package as `LOOP` keywords. You must be consistent with the contention used in your system.
+
+
