@@ -1249,3 +1249,50 @@ Third, be aware the `DIRECTORY` is not portable across implementations in how it
 
 Finally, be aware that paths may change between the time you build the Lisp image for your application, and the time you run the application from its image. You should be careful to reset your image to forget irrelevent build-time paths and reinitialize any search path from the current environment variable. `ASDF`, for instance, requires you to reset its paths with `UIOP:CLEAR-CONFIGURATION`. `UIOP` provides hooks to call functions before an image is dumped, from which to reset or `MAKUNBOUND` relevant variables.
 
+####SATISFIES
+
+You must be careful when using a `SATISFIES` clause in a type specifier.
+
+Most Common Lisp implementations can't optimize based on a `SATISFIES` type, but many of them offer simple optimizations based on a type of the form `(AND FOO (SATISFIES BAR-P))` where the first term of the `AND` clause described the structure of the object without any `SATISFIES` and the second term is the `SATISFIES`.
+
+```
+(deftype prime-number () (satisfies prime-number-p)) ; Bad
+```
+
+```
+(deftype prime-number () (and integer (satisfies prime-number-p))) ; Better
+```
+
+However, `AND` in the `DEFTYPE` language doesn't isn't a left-to-right short-circuit operator as in the expression language; it is a symmetrical connector that allows for reordering subterms and doesn't guarantee short-circuiting. Therefore, in the above example, you cannot rely on the test for `INTEGER`ness to protect the function `PRIME-NUMBER-P` from being supplied non-integer arguments to test for being instances of the type. Implementations may, and some *will*, invoke `SATIFIES`-specified function at compile-time to test various relevant objects.
+
+That is why any function specified in a `SATISFIES` clause MUST accept objects of any type as argument to the function, and MUST be defined within an `EVAL-WHEN` (as well as any variable is uses or function it calls):
+
+```
+(defun prime-number-p (n) ; Doubly bad!
+  (let ((m (abs n)))
+    (if (<= m *prime-number-cutoff*)
+        (small-prime-number-p m)
+        (big-prime-number-p m))))
+```
+
+```
+(eval-when (:compile-toplevel :load-toplevel :execute) ; Better
+  (defun prime-number-p (n)
+    (when (integerp n) ; Better
+      (let ((m (abs n)))
+        (if (<= m *prime-number-cutoff*)
+           (small-prime-number-p m)
+           (big-prime-number-p m))))))
+```
+
+In particular, the above means that the example used in the Common Lisp Standard is erroneous: `(and integer (satisfies evenp))` is *not* a safe, conformant type specifier to use, because `EVENP` will throw an error rather than return `NIL` when passed a non-integer as an argument.
+
+Finally, there is a catch when your `DEFTYPE` code expands to a `SATISFIES` with a dynamically generated function:
+
+* You cannot control when implementations will or will not expand a `DEFTYPE`.
+* The expansion itself cannot contain a function definition or any code in the expression language.
+* You cannot control when the expansion is used, it may happen in a different process that didn't expand the definition.
+
+Therefore, you cannot merely create the function as a side-effect of expansion using `EVAL` at type-expansion time. The solution is to use `ASDF-FINALIZERS:EVAL-AT-TOPLEVEL` instead. See the very last point in the discussion about `EVAL`.
+
+Common Lisp is hard to satisfy.
