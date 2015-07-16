@@ -993,4 +993,52 @@ You should avoid excessive nesting of binding forms inside a function If your fu
 
 ####Conditional Expressions
 
+Use the appropriate condition form.
+
+Use `WHEN` and `UNLESS` when there is only one alternative. Use `IF` when there are two alternatives and `COND` when there are several.
+
+However, don't use `PROGN` for an `IF` clause -- use `COND`, `WHEN`, or `UNLESS`.
+
+Note that in Common Lisp, `WHEN` and `UNLESS` return `NIL` when the condition is not met. You may take advantage of it. Nevertheless, you may use an `IF` to explicitly return `NIL` if you have a specific reason to insist on the return value. You may similarly include a fall-through clause `(t nil)` as the lasta in your `COND`, or `(otherwise nil)` as the last in your `CASE`, to insist on the fact that the value returned by the conditional matters and that such a case is going to be used. You should omit the fall-through clause when the conditional is used for side-effects.
+
+You should prefer `AND` and `OR` when it leads to more concise code than using `IF`, `COND`, `WHEN`, or `UNLESS`, and there are no side-effects involved. You may also use an `ERROR` as a side-effect in the final clause of an `OR`.
+
+You should only use `CASE` and `ECASE` to compare numbers, characters, or symbols (including booleans and keywords). Indeed, `CASE` uses `EQL` for comparisons, so strings, pathnames, and structures may not compare the way you expect, and `1` will differ from `1.0`.
+
+You should use `ECASE` and `ETYPECASE` in preference to `CASE` and `TYPECASE`. It is better to catch erroneous values early.
+
+You should not use `CCASE` or `CTYPECASE` at all. At least, you should not use them in server processes, unless you have quite robust error handling infrastructure and make sure not to leak sensitive data this way. These are meant for interactive use, and can cause interesting damage if they cause data or control to leak to attackers.
+
+You must not use gratuitous single quotes in `CASE` forms. This is a common error:
+
+```
+(case x ; Bad: silently returns NIL on mismatch
+  ('bar :bar) ; Bad: catched QUOTE
+  ('baz :baz)) ; Bad: also would catch QUOTE
+```
+
+```
+(ecase x ; Better: will error on mismatch
+  ((bar) :bar) ; Better: won't match QUOTE
+  ((baz) :baz)) ; Better: same reason
+```
+
+`'BAR` there is `(QUOTE BAR)`, meaning this leg of the case will be executed if `X` is `QUOTE`... and ditto for the second leg (though `QUOTE` will be caught by the first clause). This is unlikely to be what you really want.
+
+In `CASE` forms, you must use `otherwise` instead of `t` when you mean "execute this clause if the others fail". You must use `((t) ..) when you mean "match the symbol T" rather than "match anything". You must also use `((nil) ..)` when you mean "match the symbol `NIL`" rather than "match nothing".
+
+Therefore, if you want to map boolean `NIL` and `T` to respective symbols `:BAR` and `:QUUX`, you should avoid the former way and do it the latter way:
+
+```
+(ecase x ; Bad: has no actual error case!
+  (nil :bar) ; Bad: matches nothing
+  (t :quuz)) ; Bad: matches anything
+```
+
+```
+(ecase x ; Better: will actually catch non-booleans
+  ((nil) :bar) ; Better: matches NIL
+  ((t) :quux)) ; Better: matches T
+```
+
 
