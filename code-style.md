@@ -1199,3 +1199,16 @@ This is preferable because it does not do extra consing, and does not risk going
 
 However, you must be careful not to use `REDUCE` in ways that needlessly increase the complexity class of the computation. For instance, `(REDUCE 'STRCAT ...)` is *O(n^2)* when an appropriate implementation is only *O(n)*. Moreover, `(REDUCE 'APPEND ...)` is also *O(n^2)* unless you specify `:FROM-END T`. In such cases, you MUST NOT use `REDUCE`, and you MUST NOT use `(APPLY 'STRCAT) ...) or `(APPLY 'APPEND ...)` either. Instead you MUST use proper abstractions from a suitable library (that you may have to contribute to) that properly handles those cases without burdening users with implementation details. See for instance `UIOP:REDUCE/STRCAT`.
 
+####Avoid NCONC
+
+You should not use `NCONC`; you should use `APPEND` instead, or better, better data structures.
+
+You should almost never use `NCONC`. You should use `APPEND` when you don't depend on any side-effect. You should use `ALEXANDRIA:APPENDF` when you need to update a variable. You should probably not depend on games being played with the `CDR` of the current cons cell (which some might argue is suggested but not guaranteed by the specification); if you do, you must include a prominent comment explaining the use of `NCONC`; and you should probably reconser your data representation strategy.
+
+By extension, you could avoid `MAPCAN` or the `NCONC` feature of `LOOP`. You should instead respectively use `ALEXANDRIA:MAPPEND` and the `APPEND` feature of `LOOP`.
+
+`NCONC` is very seldom a good idea, since its time complexity is no better than `APPEND`, its space complexity class also is no better than `APPEND` in the common case where no one else is sharing the side-effected list, and its bug complexity class is way higher than `APPEND`.
+
+If the small performance hit due to `APPEND` vs. `NCONC` is a limiting factor in your program, you have a big problem and are probably using the wrong data structure; you should be using sequences with constant-time append (see Okasaki's book, and add them to `lisp-interface-library`), or more simply you should be accumulating data in a tree that will get flattened once in linear time after the accumulation phase is complete.
+
+You may only use `NCONC`, `MAPCAN` or the `NCONC` feature of `LOOP` in low-level functions where performance matters, where the use of lists as a data structure has been vetted because these lists are known to be short, and when the function or expression the result of which are accumulated explicitly promises in its contract that it only reutnrs fresh lists (in particular, it can't be a constant quote or backquote expression). Even then, the use of such primitives must be rare, and accompanied by justifying documentation.
