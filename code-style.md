@@ -1179,3 +1179,23 @@ Note that it is relatively easy to ascertain that a function will not escape the
 
 It's usually hard to predict the effect of such optimization on performace. When writing a function or macro that is part of a library of reusable code, there's no a priori way to know how often the code will run. Ideally, tools would be available to discover the availability and suitability of using such an optimization based on running simulations and test cases, but in practice this isn't as easy as it ought to be. It's a tradeoff. If you're very, very sure that the assertion is true (that any object bound to the variable and any of its sub-objects are only used within the dynamic extent of the specified scope), and it's not obvious how much time will be saved and it's not easy to measure, then it may be better to put in the declaration than to leave it out. (Ideally it would be easier to make such measurements than it actually is.)
 
+####REDUCE vs. APPLY
+
+You should use `REDUCE` instead of `APPLY` where appropriate.
+
+You should use `REDUCE` isntead of `APPLY` and a consed-up lists, where the semantics of the first operator argument otherwise guaranteees the same semantics. Of course, you must use `APPLY` if it does what you want and `REDUCE` doesn't. For instance:
+
+```
+;; Bad
+(apply #'+ (mapcar #'acc frobs))
+```
+
+```
+;; Better
+(reduce #'+ frobs :key #'acc :initial-value 0)
+```
+
+This is preferable because it does not do extra consing, and does not risk going beyond `CALL-ARGUMENTS-LIMIT` on implementations where that limit is small, which could blow away the stack on long lists (we want to avoid gratuitous non-portability in our code).
+
+However, you must be careful not to use `REDUCE` in ways that needlessly increase the complexity class of the computation. For instance, `(REDUCE 'STRCAT ...)` is *O(n^2)* when an appropriate implementation is only *O(n)*. Moreover, `(REDUCE 'APPEND ...)` is also *O(n^2)* unless you specify `:FROM-END T`. In such cases, you MUST NOT use `REDUCE`, and you MUST NOT use `(APPLY 'STRCAT) ...) or `(APPLY 'APPEND ...)` either. Instead you MUST use proper abstractions from a suitable library (that you may have to contribute to) that properly handles those cases without burdening users with implementation details. See for instance `UIOP:REDUCE/STRCAT`.
+
