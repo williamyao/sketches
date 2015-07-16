@@ -1212,3 +1212,23 @@ By extension, you could avoid `MAPCAN` or the `NCONC` feature of `LOOP`. You sho
 If the small performance hit due to `APPEND` vs. `NCONC` is a limiting factor in your program, you have a big problem and are probably using the wrong data structure; you should be using sequences with constant-time append (see Okasaki's book, and add them to `lisp-interface-library`), or more simply you should be accumulating data in a tree that will get flattened once in linear time after the accumulation phase is complete.
 
 You may only use `NCONC`, `MAPCAN` or the `NCONC` feature of `LOOP` in low-level functions where performance matters, where the use of lists as a data structure has been vetted because these lists are known to be short, and when the function or expression the result of which are accumulated explicitly promises in its contract that it only reutnrs fresh lists (in particular, it can't be a constant quote or backquote expression). Even then, the use of such primitives must be rare, and accompanied by justifying documentation.
+
+###Pitfalls
+
+#### #'FUN vs 'FUN
+
+You should usually refer to a function as `#'FUN` rather than `'FUN`.
+
+The former, which reads as `(FUNCTION FUN)`, refers to the function object, and is lexically scoped. The latter, which reads as `(QUOTE FUN)`, refers to the symbol, which when called uses the global `FDEFINITION` of the symbol.
+
+When using functions that take a functional argument (e.g., `MAPCAR`, `APPLY`, `:TEST` and `:KEY` arguments), you should use the `#'` to refer to the function, not just single quote.
+
+An exception is when you explicitly want dynamic linking, because you anticipate that the global function binding will be updated.
+
+Another exception is when you explicitly want to access a global function binding, and avoid a possible shadowing lexical binding. This shouldn't happen often, as it is usally a bad idea to shadow a function when you will want to use the shadowed function; just use a different name for the lexical function.
+
+You must consistenly use either `#'(lambda ...)` or `(lambda ...)` without `#'` everywhere. Unlike the case of `#'symbol` vs `'symbol`, it is only a syntactic different with no semantic impact, except that the former works on Genera and the latter doesn't. You must use the former style if your code is intended as a library with maximal compatibility to all Common Lisp implementations; otherewise, it is optional which style you use. `#'` may be seen as a hint that you're introducing a function in expression context; but the `lambda` itself is usually sufficient hint, and concision is good. Choose wisely, but above all, consistently with yourself and other developers, within the same file, package, system, project, etc.
+
+Note that if you start writing a new style in a heavily functional style, you may consider using lambda-reader, a system that lets you use the unicode character λ instead of `LAMBDA`. But you must not start using such a syntactic extension in an existing system without getting permission from other developers.
+
+
