@@ -1121,6 +1121,18 @@ Be careful when using the `FORMAT` condition directive. The parameters are easy 
 
 ###Optimization
 
+####Avoid Allocation
+
+You should avoid unnecessary allocation of memory.
+
+In a language with automatic storage management (such as Lisp or Java), the colloquial phrase "memory leak" refers to a situation where storage that is not actually needed nevertheless does not get deallocated, because it is still reachable.
+
+You should be careful that when you create objects, you don't leave them reachable after they are no longer needed!
+
+Herre's a particular trap-for-the-unwary in Common Lisp. If you make an array with a fill pointer, and put objects in it, and then set the fill pointer back to zero, those objects are still reachable as far as Lisp goes (the Common Lisp spec says that's it's still OK to refer to the array entries past the end of the fill pointer).
+
+Don't cons (i.e., allocate) unnecessarily. Garbage collection is not magic. Excessive allocation is usually a performance problem.
+
 ####Unsafe Operations
 
 You must only use faster unsafe operations when there is a clear performance need and you can document why it's correct.
