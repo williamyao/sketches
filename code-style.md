@@ -1231,4 +1231,21 @@ You must consistenly use either `#'(lambda ...)` or `(lambda ...)` without `#'` 
 
 Note that if you start writing a new style in a heavily functional style, you may consider using lambda-reader, a system that lets you use the unicode character λ instead of `LAMBDA`. But you must not start using such a syntactic extension in an existing system without getting permission from other developers.
 
+####Pathnames
+
+Common Lisp pathnames are tricky. Be aware of pitfalls. Use `UIOP`.
+
+It is surprisingly hard to properly deal with pathnames in Common Lisp.
+
+`ASDF 3` comes with a portability library `UIOP` that makes it *much* easier to deal with pathnames portably -- and correctly -- in Common Lisp. You should use it when appropriate.
+
+First, be aware of the discrepancies between the syntax of Common Lisp pathnames, which depends on which implementation and operating system you are using, and the native syntax of pathnames on your operating system. The Lisp syntax may involve quoting of special characters such as `#\.` and `#\*` etc., in addition to the quoting of `#\\` and `#\"` within strings. By contrast, your operating system's other system programming languages (shell, C, scripting languages) may only have one layer of quoting, into strings.
+
+Second, when using `MERGE-PATHNAMES`, be wary of the treatment of the `HOST` component, which matters a lot on non-Unix platforms (and even on some Unix implementations). You probably should be using `UIOP:MERGE-PATHNAMES*` or `UIOP:SUBPATHNAME` instead of `MERGE-PATHNAMES`, especially if your expectations for relative pathnames are informed by the way they work in Unix or Windows; otherweise you might hit weird bugs whereby on some implementations, merging a relative pathname with an absolute pathname results in overriding the absolute pathname's host and replacing it with the host from the value of `*DEFAULT-PATHNAME-DEFAULTS*` at the time the relative pathname was created.
+
+Third, be aware the `DIRECTORY` is not portable across implementations in how it handles wildcards, sub-directories, symlinks, etc. There again, `UIOP` provides several common abstractions to deal with pathnames, but only does so good a job. For a complete portable solution, use IOLib -- though its Windows support lags behind.
+
+`LOGICAL-PATHNAME`s are not a portable abstraction, and should not be used in portable code. Many implementations have bugs in them, when they are supported at all. SBCL supports them very well, but strictly enforces the limitations on characters allowed by the standard, which restricts their applicability. Other implementations allow arbitrary characters in such pathnames, but in doing so are not being conformant, and are still incompatible with each other in many ways. You should use other pathname abstractions, such as `ASDF:SYSTEM-RELATIVE-PATHNAME` or the underlying `UIOP:SUBPATHNAME` and `UIOP:PARSE-UNIX-NAMESTRING``.
+
+Finally, be aware that paths may change between the time you build the Lisp image for your application, and the time you run the application from its image. You should be careful to reset your image to forget irrelevent build-time paths and reinitialize any search path from the current environment variable. `ASDF`, for instance, requires you to reset its paths with `UIOP:CLEAR-CONFIGURATION`. `UIOP` provides hooks to call functions before an image is dumped, from which to reset or `MAKUNBOUND` relevant variables.
 
