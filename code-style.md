@@ -1145,4 +1145,37 @@ You must not define or use unsafe operations without both profiling results indi
 
 On some compilers, new unsafe operations can usually be defined by combining type declarations with an `OPTIMIZE` declaration that has sufficiently high `SPEED` and low `SAFETY`. In addition to providing more speed for production code, such declarations may be more helpful than `CHECK-TYPE` assertions for finding bugs at compile-time, on compilers that have type inference. These compilers may interpret those declarations as assertions if you switch to safer and slower optimize settings; this is good to locate a dynamic error in your code during development, but is not to be used for production code since it defeats the purpose of declarations as a performance trick.
 
+####DYNAMIC-EXTENT
+
+You should only use `DYNAMIC-EXTENT` where it matters for performance, and you can document why it is correct.
+
+`DYNAMIC-EXTENT` declarations are a particular case of unsafe operations.
+
+The purpose of a `DYNAMIC-EXTENT` declaration is to improve performance by reducing garbage collection in cases where it appears to be obvious that an object's lifetime is within the "dynamic extent" of a function. That means the object is created at some point after the function is called, and the object is always inaccessible after the function exits by any means.
+
+By declaring a variable or a local function `DYNAMIC-EXTENT`, the programmer *asserts* to Lisp that any object that is ever a value of that variable or the closure that is the definition of a function has a lifetime within the dynamic extent of the (innermost) function that declares the variable.
+
+The Lisp implementation is then free to use that information to make the program faster. Typically, Lisp implementations can take advantage of this knowledge to stack-allocate:
+
+* The lists created to store `&REST` parameters.
+* Lists, vectors and structures allocated within a function.
+* Closures.
+
+If the assertion is wrong, i.e. if the programmer's claim is not true, the results can be *catastrophic*: Lisp can terminate any time after the function returns, or it can hang forever, or -- worst of all -- it can produce incorrect results without any runtime error!
+
+Even if the assertion is correct, future changes to the function might introduce a violation of the assertion. This increases the danger.
+
+In most cases, such objects are ephemeral. Modern Lisp implementations use generational garbage collectors, which are quite efficient under these circumstances.
+
+Therefore, `DYNAMIC-EXTENT` declarations should be used sparingly. You must only use them if:
+
+1. There is some good reason to think that the overall effect of performance is noticeable, and
+2. It is absolutely clear that the assertion is true.
+3. It is quite unlikely that the code will be changed in ways that cause the declaration to become false.
+
+Point (1) is a special case of the principle of avoiding premature optimization. An optimization like this only matters if such objects are allocated at a very high rate, e.g. "inside an innert loop".
+
+Note that it is relatively easy to ascertain that a function will not escape the dynamic extent of the current call frame by analyzing where the function is called and what other functions it is passed to; therefore, you should somewhat be wary of declaring a function `DYNAMIC-EXTENT`, but this is not a high-stress declaration. On the other hand, it is much harder to ascertain that none of the objects ever bound or assigned to that variable and none of their sub-objects will escape the dynamic extent of the current call frame, and that they still won't be in any future modification of a function. Therefore, you should be extremely ware of declaring a variable `DYNAMIC-EXTENT`.
+
+It's usually hard to predict the effect of such optimization on performace. When writing a function or macro that is part of a library of reusable code, there's no a priori way to know how often the code will run. Ideally, tools would be available to discover the availability and suitability of using such an optimization based on running simulations and test cases, but in practice this isn't as easy as it ought to be. It's a tradeoff. If you're very, very sure that the assertion is true (that any object bound to the variable and any of its sub-objects are only used within the dynamic extent of the specified scope), and it's not obvious how much time will be saved and it's not easy to measure, then it may be better to put in the declaration than to leave it out. (Ideally it would be easier to make such measurements than it actually is.)
 
