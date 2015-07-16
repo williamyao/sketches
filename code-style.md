@@ -1041,4 +1041,30 @@ Therefore, if you want to map boolean `NIL` and `T` to respective symbols `:BAR`
   ((t) :quux)) ; Better: matches T
 ```
 
+####Identity, Equality, and Comparisons
 
+You should use the appropriate predicates when comparing objects.
+
+Lisp provides four general equality predicates: `EQ`, `EQL`, `EQUAL`, and `EQUALP`, which subtly vary in semantics. Additionally, Lisp provides the type-specific predicates `=`, `CHAR=`, `CHAR-EQUAL`, `STRING=`, and `STRING-EQUAL`. Know the distinction!
+
+You should use `EQL` to compare objects and symbols for *identity*.
+
+You must not use `EQ` to compare numbers and characters. Two numbers or characters that are `EQL` are not required by Common Lisp to be `EQ`.
+
+When choosing between `EQ` and `EQL`, you should use `EQL` unless you are writing performance-critical low-level code. `EQL` reduced the opportunity for a class of embarrassing errors (i.e. if numbers or characters are ever compared). There may be a tiny performance cost relative to `EQ`, although under SBCL, it often compiles away entirely. `EQ` is equivalent to `EQL` and type declarations, and use of it for optimization should be treated just like any such unsafe operations.
+
+You should use `CHAR=` for case-dependent character comparison, and `CHAR-EQUAL` for case-ignoring character comparisons.
+
+You should use `STRING=` for case-dependent string comparisons, and `STRING-EQUAL` for case-ignoring string comparisons.
+
+A common mistake when using `SEARCH` on strings is to provide `STRING=` or `STRING-EQUAL` as the `:TEST` function. The `:TEST` function is given two sequence elements to compare. If the sequences are strings, the `:TEST` function is called on two characters, so the correct tests are `CHAR=` or `CHAR-EQUAL`. If you use `STRING=` or `STRING-EQUAL`, the result is what you expect, but in some Lisp implementations it's much slower. CCL (at least as of 8/2008) creates a one-character string upon each comparison, for example, which is very expensive.
+
+Also, you should use `:START` and `:END` arguments to `STRING=` or `STRING-EQUAL` instead of using `SUBSEQ`; e.g. `(string-equal (subseq s1 2 6) s2)` should instead be `(string-equal s1 s2 :start1 2 :end1 6)`. This is preferable because it does not cons.
+
+You should use `ZEROP`, `PLUSP`, or `MINUSP`, instead of comparing a value to `0` or `0.0`.
+
+You must not use exact comparison on floating point numbers, since the vague nature of floating point arithmetic can produce little "errors" in numeric value. You should compare absolute values to a threshold.
+
+You must use `=` to compare numbers, unless you really mean to `0`, `0.0` and `-0.0` to compare unequal, in which case you should use `EQL`. Then again, you must not usually use exact comparison on floating point numbers.
+
+Monetary amounts should be using decial (rational) numbers to avoid the complexities and rounding errors of floating-point arithmetic. Libraries such as wu-decimal may help you; once again, if this library is not satisfactory, see above about Using Libraries and Open-Sourcing Code.
