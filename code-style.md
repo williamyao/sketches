@@ -1081,4 +1081,40 @@ In the body of a `DOTIMES`, do not set the iteration variable. (CCL will issue a
 
 Most systems use unadorned symbols in the current package as `LOOP` keywords. Other systems use actual `:keywords` from the `KEYWORD` package as `LOOP` keywords. You must be consistent with the contention used in your system.
 
+####I/O
 
+Use the appropriate I/O functions.
+
+When writing a server, code must not send output to the standrad streams such as `*STANDARD-OUTPUT*` or `*ERROR-OUTPUT*`. Instead, code must use the proper logging framework to output messages for debugging. We are running as a server, so there is no console!
+
+Code must not use `PRINT-OBJECT` to communicate with a user -- `PRINT-OBJECT` is for debugging purposes only. Modifying any `PRINT-OBJECT` method must not break any public interfaces.
+
+You should not use a sequence of `WRITE-XXX` where a single `FORMAT` string could be used. Using `FORMAT` allowed you to parameterize the format control string in the future if the need arises.
+
+You should use `WRITE-CHAR` to emit a character rather than `WRITE-STRING` to emit a single-character string.
+
+You should not use `(format nil "~A" value)`; you should use `PRINC-TO-STRING` instead.
+
+You should use `~<Newline>` or `~@<Newline>` in format strings to keep them from wrapping in 100-column editor windows, or to indent sections or clauses to make them more readable.
+
+You should not use `STRING-UPCASE` on `STRING-DOWNCASE` on format control parameters; instead, it should use `"~:@(~A~)"` or `"~(~A~)"`.
+
+Be careful when using the `FORMAT` condition directive. The parameters are easy to forget.
+
+* No parameters, e.g. `"~[Siamese~;Manx~;Persian~] Cat"`
+
+  Take one format argument, which should be an integer. Use it to choose a clause. Clause numbers are zero-based. If the number is out of range, just print nothing. You can provide a default value by putting a `:` in front of the last `~;`. E.g. in `"~[Siamese~;Manx~;Persian~:;Alley~] Cat"`, an out-of-range arg prints `"Alley"`.
+
+* `:` parameters, e.g. `"~:[Siamese~;Manx~]"`
+
+  Take one format argument. If it's `NIL`, use the first clause, otherwise use the second clause.
+
+* `@` parameters, e.g. `"~@[Siamese ~a~]"`
+
+  If the next format argument is true, use the choice, but do NOT take the argument. If it's false, take one argument and print nothing. (Normally the clause uses the format argument.)
+
+* `#` parameter, e.g. `"~#[ none~; ~s~; ~s and ~s~]"`
+
+  Use the number of arguments to format as the number to choose a clause. The same as no parameters in all other ways. Here's the full hairy example:
+
+  `"Items:~#[ none~; ~S~; ~S and ~S~:;~@{~#[~; and~] ~S~^ ,~}~]."`
