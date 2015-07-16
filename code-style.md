@@ -438,8 +438,9 @@ When signing comments, you should use your username (for code within the company
 
 ```
 ;;--- TODO(george@gmail.com): Refactor to provide a better API.
+```
 
-Be spsecific when indicating times or software released in a TODO comment and use YYYY-MM-DD format for dates to make automated processing of such dates easier, e.g., 2038-01-20 for the end of the 32-bit signed `time_t`.
+Be specific when indicating times or software released in a TODO comment and use YYYY-MM-DD format for dates to make automated processing of such dates easier, e.g., 2038-01-20 for the end of the 32-bit signed `time_t`.
 
 ```
 ;;---(brown): Remove this code after release 1.7 or before 2012-11-30.
