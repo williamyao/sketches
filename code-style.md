@@ -514,4 +514,290 @@ The names of global constants should start and end with plus characters.
 
 Global variable names should start and end with asterisks (also known in this context as earmuffs).
 
-In some projects, parameters that are not meant to be usually modified or bound under normal circumstances (but may be during experimentation or exceptional situations) should start (but do not end)
+In some projects, parameters that are not meant to be usually modified or bound under normal circumstances (but may be during experimentation or exceptional situations) should start (but do not end) with a dollar sign. If such a convention exists within your project, you should follow it consistently. Otherwise, you should avoid naming variables like this.
+
+Common Lisp does not have global lexical variables, so a naming convention is used to ensure that globals, which are dynamically bound, never have names that overlap with local variables. It is possible to fake global lexical variables with a differently named global variable and a `DEFINE-SYMBOL-MACRO`. You should not use this trick, unless you first publish a library that abstracts it away.
+
+```
+(defconstant +hash-results+ #xbd49d10d10cbee50)
+
+(defvar *maximum-search-depth* 100)
+```
+
+####Predicate Names
+
+Names of predicate functions and variables end with a `"P"`.
+
+You should name boolean-valued functions and variables with a trailing `"P"` or `"-P"`, to indicate they are predicates. Generally, you should use `"P"` when the rest of the function name is one word and `"-P"` when it is more than one word.
+
+A rationale for this convention is given in the CLtL2 chapter on predicates.
+
+For uniformity, you should follow the convention above, and not one of the alternatives below.
+
+An alternative rule used in some existing packages is to always use `"-P"`. Another alternative rule used in some existing packages is to always use `"?"`. When you develop such a package, you must be consistent with the rest of the package. When you start a new package, you should not use such an alternative rule without a very good documented reason.
+
+####Omit Library Prefixes
+
+You should not include a library or package name as a prefix within the name of symbols.
+
+When naming a symbol (external or internal) in a package, you should not include the package name within the name of the symbol. Naming a symbol this way makes it awkward to use from a client package accessing the symbol by qualifying it with a package prefix, where the package name then appears twice (once as a package prefix, another time as a prefix within the symbol name).
+
+```
+;; Bad
+(in-package #:varint)
+(defun varint-lenfth64 () ... )
+
+(in-package #:client-code)
+(defconst +padding+ (varint:varint-length64 +end-token+))
+```
+
+```
+;; Better
+(in-package #:varint)
+(defun length64 () ... )
+
+(in-package #:client-code)
+(defconst +padding+ (varint:length64 +end-token+))
+```
+
+An exception to the above rule would be to include a prefix for the names of variables that would otherwise be expected to clash with variables in packages that use the current one. For instance, `ASDF` exports a variable `*ASDF-VERBOSE*` that controls the verbosity of `ASDF` only, rather than of the entire Lisp program.
+
+####Packages
+
+Use packages appropriately.
+
+Lisp packages are used to demarcate namespaces. Usually, each system has its own namespace. A package has a set of external symbols, which are intended to be used from outside the package, in order to allow other modules to use this module's facilities.
+
+The internal symbols of a package should never be referred to from other packages. That is, you should never have to use the double-colon `::` construct, (e.g. `QUAKE::HIDDEN-FUNCTION`). If you need to use double-colons to write real production code, something is wrong and needs to be fixed.
+
+As an exception, unit tests may use the internals of the package being tested. So when you refactor, watch out for internals used by the package's unit tests.
+
+The `::` construct is also useful for very temporary hacks, and at the REPL. But if the symbol really is part of the externally-visible definition of the package, export it.
+
+You may find that some internal symbols represent concepts you usually want to abstract away and hide under the hood, yet at times are necessary to expose for various extensions. For the former reason, you do not want to export them, yet for the latter reason, you have to export them. The solution is to have two different packages, one for your normal users to use, and another for the implementation and its extenders to use.
+
+Each package is one of two types:
+
+* Intended to be included in the `:use` specification of other packages. If package `A` "uses" package `B`, then the external symbols of package `B` can be referenced from within package `A` without a package prefix. We mainly use this for low-level modules that provide widely-used facilities.
+* Not intended to use "used". To reference a facility provided by package `B`, code in package `A` must use an explicit package prefix, e.g. `B:DO-THIS`.
+
+If you add a new package, it should always be of the second type, unless you have a special reason and get permission. Usually a package is designed to be one or the other, by virtue of the names of the functions. For example, if you have an abstraction called `FIFO`, and it were in a package of the first type you'd have functions named things like `FIFO-ADD-TO` and `FIFO-CLEAR-ALL`. (`FIFO:FIFO-CLEAR-ALL is redundant and ugly.)
+
+Another good thing about packages is that your symbol names won't collide with the names of other packages, except the ones your packages "use". So you have to stay away from symbols that are part of the Lisp implementation (since you always "use" that) and that are part of any other packages you "use", but otherwise you are free to make up your own names, even short ones, and not worry about someone else having used the same name. You're isolated from each other.
+
+Your package must not shadow (and thus effectively redefine) symbols that are part of the Common Lisp language. There are certain exceptions, but they should be very well-justified and extremely rare:
+
+* If you are explicitly replacing a Common Lisp symbol by a safer or more featureful version.
+* If you are defining a package not meant to be "used", and have a good reason to export a symbol that clashes with Common Lisp, such as `log:error`, `log:warn` and so on.
+
+###Language Usage Guidelines
+
+####Mostly Functional Style
+
+You should avoid side-effects when they are not necessary.
+
+Lisp is best used as a "mostly functional" language.
+
+Avoid modifying local variables, try rebinding instead.
+
+Avoid creating objects and then SETFing their slots. It's better to set the slots during initialization.
+
+Make classes as immutable as possible, that is, avoid giving slots setter functions if at all possible.
+
+Using a mostly functional style makes it much easier to write concurrent code that is thread-safe. It also makes it easier to test the code.
+
+####Recursion
+
+You should favor iteration over recursion.
+
+Common Lisp systems are not required to implement function calls from tail positions without leaking stack space -- which is known as proper tail calls (PTC), tail call elimination (TCE), or tail call optimization (TCO). This means that indefinite recursion through tail calls may quickly blow out the stack, which hampers functional programming. Still, most serious implementations (including SBCL and CCL) do implement proper tail calls, but with restrictions:
+
+* The `(DECLARE (OPTIMIZE ...))` settings must favor `SPEED` enough and not favor `DEBUG` too much, for some compiler-dependent meanings of "enough" and "too much". (For instance, in SBCL, you should avoid `(SPEED 0)` and `(DEBUG 3)` to achieve proper tail calls.)
+* There should not be dynamic bindings around the call (even though some Scheme compilers are able to properly treat such dynamic bindings, called parameters in Scheme parlance.)
+
+For compatability with all compilers and optimization settings, and to avoid stack overflow when debugging, you should prefer iteration or the built in mapping functions to relying on proper tail cails.
+
+If you do rely on proper tail calls, you must prominently document the fact, and take appropriate measures to ensure and appropriate compiler is used with appropriate optimization settings. For fully portable code, you may have to use trampolines instead.
+
+####Special Variables
+
+Use special variables sparingly.
+
+Using Lisp "special" (dynamically bound) variables as implicit arguments to functions should be done sparingly, and only in cases where it won't surprise the person reading code, and where it offers significant benefits.
+
+Indeed, each special variable constitutes state. Developers have to mentally track the state of all relevant variables when trying to understand what the code does and how it does it; tests have to written and run with all the relevant combinations; to isolate some activity, care has to be taken to locally bind all relevant variables, including those of indirectly used modules. They can hide precious information from being printed in a backtrace. Not only is there overhead associated with each new variable, but interactions between variables can make the code exponentially more complex as the number of such variables increases. The benefits have to match the costs.
+
+Note though that a Lisp special variable is not a global variable in the sense of a global variable in, say, BASIC or C. As special variables can be dynamically bound to a local value, they are much more powerful than global value cells where all users necessarily interfere with each other.
+
+Good candidates for such special variables are items for which "the current" can be naturally used a prefix, such as "the current database connection" or "the current business data source". They are singletons as far as the rest of the code is concerned, and often passing them as an explicit argument does not add anything to the readability or maintainability of the source code in question.
+
+They can make is easier to write code that can be refactor. If you have a request processing chain, with a number of layers that all operate upon a "current" request, passing the request object explicitly to every function requires that every function in the chain have a request argument. Factoring out code into new functions often requires that these functions also have this argument, which clutters the code with boilerplate.
+
+You should treat special variables as though they are per-thread variables. By default, you should leave a special variable with no top-level binding at all, and each thread of control that needs the variable should bind it explicitly. This will mean that any incorrect use of the variable will result in an "unbound variable" error, and each thread will see its own value for the variable. Variables with a default global value should usually be locally bound at thread creation time. You should use suitable infrastructure to automate the appropriate declaration of such variables.
+
+####Assignment
+
+Be consistent in assignment forms.
+
+There are several styles for dealing with assignment and side-effects; whichever a given package is using, keep using the same consistently when hacking said package. Pick a style that makes sense when starting a new package.
+
+Regarding multiple assignment in the same form, there are two schools: the first style groups as many assignments as possible into a single `SETF` or `PSETF` form thus minimizing the number of forms with side-effects; the second style splits assignment into as many individual `SETF` (or `SETQ`, see below) forms as possible, to maximize the chances of located forms that modify a kind of place by grepping for `(setf (foo ...` A grep pattern must actually contain as many place place-modifying forms as you may use in your programs, which may make this rationale either convincing or moot depending on the rest of the style of your code. You should follow the conventions used in the package you are hacking. We recommend the first convention for new packages.
+
+Regarding `SETF` and `SETQ`, there are two schools: the first regards `SETQ` as an archaiv implementation detail, and avoids it entirely in favor of `SETF`; the second regards `SETF` as an adiitional layer of complexity, and avoids it in favor of `SETQ` whenever possible (i.e. whenever the assigned place is a variable or symbol-macro). You should follow the convention used in the package you are hacking. We recommend the first convention for new packages.
+
+In the spirit of a mostly pure functional style, which makes testing and maintenance easier, we invite you to consider how to do things with the fewest assignments possible.
+
+####Assertions and Conditions
+
+You must make proper usage of assertions and conditions.
+
+* `ASSERT` should be used ONLY to detect internal bugs. Code should `ASSERT` invariants whose failure indicates that the software is itself broken. Incorrect input should be handled properly at runtime, and must not cause an assertion violation. The audience for an `ASSERT` failure is a developer. Do not use the data-form and argument-form in `ASSERT` to specify a condition to signal. It's fine to use them to print out a message for debugging purposes (and since it's only for debugging, there's no issue of internationalization.)
+* `CHECK-TYPE`, `ETYPECASE` are also forms of assertions. When one of these fails, that's a detected bug. You should prefer to use `CHECK-TYPE` over `(DECLARE (TYPE ...))` for the inputs of functions.
+* Your code should use assertions and type checks liberally. The sooner a bug is discovered, the better! Only code in the critical path for performance and internal helpers should eschew explicit assertions and type checks.
+* Invalid input, such as files that are read but do not conform to the expected format, should not be treated as assertion violations. Always check to make sure that input is valid, and take appropriate actions if it is not, such as signalling a real error.
+* `ERROR` should be used to detect problems with user data, requests, permissions, etc., or to report "unusual outcomes" to the caller.
+* `ERROR` should always be called with an explicit condition type; it should never simply be called with a string. This enables internationalization.
+* Functions that report unusual outcomes by signaling a condition should say so explicitly in their contracts (their textual descriptions, in documentation and docstrings etc.). When a function signals a condition that is not specified by its contract, that's a bug. The contract should specify the condition class(es) clearly. The function may then signal any condition that is a type-of any of those conditions. That is, signaling instances of subclasses of the documented condition classes is fine.
+* Complex bug-checks may need to use `ERROR` instead of `ASSERT`.
+* When writing a server, you must not call `WARN`. Instead, you should use the appropriate logging framework.
+* Code must not call `SIGNAL`. Instead, use `ERROR` or `ASSERT`.
+* Code should not use `THROW` and `CATCH`; instead use the `RESTART` facility.
+* Code should not generically handle all conditions, e.g. type `T`, or use `IGNORE-ERRORS`. Instead, let unknown conditions propagate to the standard ultimate handler for processing.
+* There are a few places where handling all conditions is appropriate, but they are rare. The problem is that handling all conditions can mask program bugs. If you *do* need to handle "all conditions", you MUST handle only `ERROR`, *not* `T` and not `SERIOUS-CONDITION`. (This is notably because CCL's process shutdown depends on being able to signal `process-reset` and have it handled by CCL's handler, so we must not interpose our own handler.
+* `(error (make-condition 'foo-error ...))` is equivalent to `(error 'foo-error ...) -- code must use the shorter form.
+* Code should not signal conditions from inside the cleanup form of `UNWIND-PROTECT` (unless they are alwys handled inside the cleanup form), or otherwise do non-local exits from cleanup handlers outside of the handler e.g. `INVOKE-RESTART`.
+* Do not clean up by resignaling. If you do that, and the condition is not handled, the stack trace will halt at the point of the resignal. And the rest is the part we really care about!
+
+```
+;; Bad
+(handler-case
+  (catch 'ticket-at
+    (etd-process-blocks))
+  (error (c)
+    (reset-parser-values)
+    (error c)))
+```
+
+```
+;; Better
+(unwind-protect
+  (catch 'ticket-at
+    (etd-process-blocks))
+  (reset-parser-values))
+```
+
+####Type Checking
+
+If you know the type of something, you should make it explicit in order to enable compile-time and run-time sanity-checking.
+
+If your function is using a special variable as an implicit argument, it's good to put in a `CHECK-TYPE` for the special variable, for two reasons: to clue in the person readin the code that this variable is being used implicitly as an argument, and also to help detect bugs.
+
+Using `(declare (type ...))` is the least desirable mechanism to use because, as Scott McKay puts it:
+
+> The fact is, `(declare (type ...))` does different things depending on the compiler settings of speed, safety, etc. In some compilers, when speed is greater than safety, `(declare (type ...))` will tell the compiler "please assume that these variables have these types" *without* generating any type-checks. That is, if some variable has the value `1432` in it, and you declare it to be of type `string`, the compiler might just go ahead and use it as though it's a string.
+
+> Moral: don't use `(declare (type ...))` to declare the contract of any API functions, it's not the right thing. Sure, use it for "helper" functions, but not API functions.
+
+You should, of course, use appropriate declarations in internal low-level functions where these declarations are used for optimization. When you do, however, see our recommendations for Unsafe Operations.
+
+####CLOS
+
+Use CLOS appropriately.
+
+When a generic function is intended to be called from other modules (other parts of the code), there should be an explicit `DEFGENERIC` form, with a `:DOCUMENTATION` string explaining the generic contract of the function (as opposed to its behavior for some specific class). It's generally good to do explicit DEFGENERIC forms, but  for module entry points it is mandatory.
+
+When the argument list of a generic function includes `&KEY`, `DEFGENERIC` should always explicitly list all of the keyword arguments that are acceptable, and explain what they mean. (Common Lisp does not require this, but it is good form, and it may avoid spurious warnings on SBCL.)
+
+You should avoid `SLOT-VALUE` and `WITH-SLOTS`, unless you absolutely intend to circumvent any sort of method combination that might be in effect for the slot. Rare exceptions include `INITIALIZE-INSTANCE` and `PRINT-OBJECT` methods and accessing normally hidden slots in the low-level implementation of methods that provide user-visible abstractions. Otherwise, you should use accessors, `WITH-ACCESSORS`.
+
+Accessor names generally follow a convention of `<protocol-name>-<slot-name>`, where a "protocol" in this case loosely indicates a set of functions with well-defined behavior.
+
+No implication of a formal "protocol" concept is necessarily intended, much less first-class "protocol" objects. However, there may indded be an abstract CLOS class or an Interface-Passing Style interface that embodies the protocol. Further (sub)classes or (sub)interfaces may then implement all or part of a protocol by defining some methods for (generic) functions in the protocol, including readers and writers.
+
+For example, if there were a notational protocol called `pnr` with accessors `pnr-segments` and `pnr-passengers`, then the classes `air-pnr`, `hotel-pnr` and `car-pnr` could each reasonably implement methods for `pnr-segments` and `pnr-passengers` as accessors.
+
+By default, an abstract base class name is used as the notional protocol name, so accessor names default to `<class-name>-<slot-name>`; while such names are thus quite prevalent, this form is neither required nor even preferred. In general, it contributes to "symbol bloat", and in many cases has led to a proliferation of "trampoline" methods.
+
+Accessors named `<slot-name>-of` should not be used.
+
+Explicit `DEFGENERIC` forms should be used when there are (or it is anticipated that there will be) more than one `DEFMETHOD` for that generic function. The reason is that the documentation for the generic function explains the abstract conttract for the function, as opposed to explaining what an individual method does for some specific class(es).
+
+You must not use generic functions where there is no notional protocol. To put it more concretely, if you have more than one generic function that specializes its Nth argument, the specializing classes should all be descendants of a single class. Generic functions must not be used for "overloading", i.e. simply to use the same name for two entirely unrelated types.
+
+More precisely, it's not really whether they descend from a common superclass, but whether they obey the same "protocol". That is, the two classes should handle the same set of generic functions, as if there were an explicit `DEFGENERIC` for each method.
+
+Here's another way to put it. Suppose you have two classes, A and B, and a generic function F. There are two methods for F, which dispatch on an argument being of types A and B. Is it plausible that there might be a function call somewhere in the program that calls F, in which the argument might sometimes, at runtime, be of class A and other times be of class B? If not, you are probably overloading and should not be using a single generic function.
+
+We allow one exception to this rule: it's OK to do overloading if the corresponding argument "means" the same thing. Typically one overloading allows an X object, and the other allows the name of an X object, which might be a symbol or something.
+
+You must not use MOP "intercessory" operations at runtime. You should not use MOP "intercessory" operations at compile-time. At runtime, there are at worst a danger, at best a performance issue. At compiler-time, it is usually cleaner that macros should set things up the right way in one pass than have to require a second pass of fixups through intercessin; but sometimes, fixups are necessary to resolve forward references, and intercession is allowed then. MOP intercession is a great tool for interactive development, and you may enjoy it while developing and debugging, but you should not use it in normal applications.
+
+If a class definition creates a method as a `:READER`, `:WRITER`, or `:ACCESSOR`, do not redefine that method. It's OK to add `:BEFORE`, `:AFTER`, and `:AROUND` methods, but don't override the primary method.
+
+In methods with keyword arguments, you must always use `&KEY`, even if the method does not care about the values of any keys, and you should never use `&ALLOW-OTHER-KEYS`. As long as a keyword is accepted by any method of a generic function, it's OK to use it in the generic function, even if the other methods of the same generic function don't mention it explicitly. This is particularly important for `INITIALIZE-INSTANCE` methods, since if you did uses `&ALLOW-OTHER-KEYS`, it would disable error checking for misspelled or wrong keywords in `MAKE-INSTANCE` calls!
+
+A typical `PRINT-OBJECT` method might look like this:
+
+```
+(defmethod print-object ((p person) stream)
+  (print-unreadable-object (p stream :type t :identity t)
+    (with-slots (first-name last-name) p
+      (format stream "~a ~a" first-name last-name))))
+```
+
+###Meta-language Guidelines
+
+####Macros
+
+Use macros as appropriate, which is often. Define macros when appropriate, which is seldom.
+
+Macros bring syntactic abstraction, which is a wonderful thing. It helps make your code clearer, by describing your intent without getting bodded in implementation details (indeed abstracting those details away). It helps make your code more concise and more readable, by eliminating both redundancy and irrelevant details. But it comes at a cost to the reader, which is learning a new syntactic concept for each macro. And so it should not be abused.
+
+The general conclusion is that there shouldn't be any recognizable *design pattern* is a good Common Lisp program. The one and only pattern is *use the language*, which includes defining and using syntactic abstractions.
+
+Existing macros must be used whenever they make  code clearer by converying intent in a more concise way, which is often. When a macro is available in your project that expresses the concept you're using, you must not write the expansion rather than use the macro.
+
+New macros should be defined as appropriate, which should be seldom, for common macros have already been provided by the language and its various libraries, and your program typically only needs few new ones relative to its size.
+
+You should follow the OAOOM rule of thumb for deciding when to create a new abstraction, whether syntactic or not: if a particular pattern is used more than twice, it should probably be abstracted away. A more refined rule to decide when to use abstraction should take into account the benefit in terms of number of uses and gain at each use, to the costs in terms of having to get used to reading the code. For syntactic abstractions, costs and benefits to the reader is usually more important that costs and benefits to the writer, because good code is usually written once and read many times by many people (including the same programmer who has to maintain the program after having forgotten it). Yet the cost to the writer of the macro should also be taken into account; however, in doing so it should rather be compared to the cost of the programmer writing other code instead that may have higher benefits.
+
+Using Lisp macros properly requires taste. Avoid writing complicated macros unless the benefit clearly outweights the cost. It takes more effort for your fellow developers to learn your macro, so you should only use a macro if the gain in expressiveness is big enough to justify that cost. As usual, feel free to consult your colleagues if you're not sure, since without a lot of Lisp experience, it can be hard to make this judgment.
+
+You must never use a macro where a function will do. That is, if the semanctics of what you are writing conforms to the semantics of a function, then you must write it as a function rather than a macro.
+
+You must not transform a function into a macro for performance reaons. If profiling shows that you have a performance problem with a specific function `FOO`, document the need and profiling-results appropriately, and `(declaim (inline foo))`.
+
+You can also use a compiler-macro as a way to speed up function execution by specifying a source-to-source transformation. Beware that it interferes with tracing the optimized function.
+
+When you write a macro-defining macro (a macro that generates macros), document and comment it particularly clearly, since these are harder to understand.
+
+You must not install new reader macros without a consensus among the developers of your system. Reader macros must not leak out of the system that uses them to clients of that system or other systems used in the same project. You must use software such as `cl-readsyntax` or `named-readtables` to control how reader macros are used. Then clients who desire to may use the same reader macros as you do. In any case, your system must be usable even to clients who do not use these reader macros.
+
+If your macro has a parameter that is a lisp form that will be evaluated when the expanded code is run, you should name the parameter with the suffix `-form`. This convention helps make it clearer to the macro's user which parameters are Lisp forms to be evaluated, and which are not. The common names `body` and `end` are exceptions to this rule.
+
+You should follow the so-called `CALL-WITH` style when it applies. This style is explained at length in http://random-state.net/log/3390120648.html. The general principle is that the macro is strictly limited to processing the syntax, and as much of the semantics as possible is kept in normal functions. Therefore, a macro `WITH-FOO` is often limited to generating a call to an auxiliary function `CALL-WITH-FOO` with arguments deduced from the macro arguments. Macaro `&body` arguments are typically wrapped into a lambda expression of which they become the body, which is passed as one of the arguments of the auxiliary function.
+
+The separation of syntactic and semantic concerns is a general principle of style that applies beyond the case of `WITH-` macros. Its advantages are many. By keeping semantics outside the macro, the macro is made simpler, easier to get right, and less subject to change, which makes it easier to develop and maintain. The semantics is written in a simpler language -- one with staging -- which also makes it easier to develop and maintain. It becomes possible to debug and update the semantic function without having to recompile all clients of the macro. The semantic function appears in the stack trace which also helps debug client functions. The macro expansion is made shorter and each expansion shares more code with other expansions, which reduces memory pressure which in turn usually makes things faster. It also makes sense to write the semantic functions first, and write the macros last as syntactic sugar on top. You should use this style unless the macro is used in tight loops where performance matters, and even then, see our rules regarding optimization.
+
+Any functions (closures) created by the macro should be named, which can be done using `FLET`. This also allows you toe declare the function to be of dynamic extent (if it is -- and often it is; yet see below regarding DYNAMIC-EXTENT).
+
+If a macro call contains a form, and the macro expansion includes more than one copy of that form, the form can be evaluated more than once, and code it contains macro-expanded and compiled more than once. If someone uses the macro and calls it with a form that has side effects or that takes a long time to compute, the behavior will be undesirable (unless you're intentionally writing a control structure such as a loop). A convenient way to avoid this problem is to evaluate the form only once, and bind a (generated) variable to the result. There is a very useful macro called `ALEXANDRIA:ONCE-ONLY` that generates code to do this. See also `ALEXANDRIA:WITH-GENSYMS`, to make some temporary variables in the generated code. Note that if you follow our `CALL-WITH` style, you typically expand the code only once, as either an argument to the auxiliary function, or the body of a lambda passed to it; you therefore avoid the above complexity.
+
+When you write a macro with a body, such as `WITH-XXX` macro, even if there aren't any parameters, you should leave space for them anyway. For example, if you invent `WITH-LIGHTS-ON`, do not make the call to it look like `(defmacro with-lights-on (&body b) ...)`. Instead, do `(defmacro with-lights-on (() &body) ...)`. That way, if parameters are needed in the future, you can add them without necessarily having to change all the uses of the macro.
+
+####EVAL-WHEN
+
+When using `EVAL-WHEN`, you should almost always use all of `(:compile-toplevel :load-toplevel :execute)`.
+
+Lisp evaluation happens at serveral times, some of them interleaved. Be aware of them when writing macros. EVAL-WHEN considered harmful to your mental health.
+
+In summary of the article linked above, unless you're doing truly advanced macrology, the only valid combination in an `EVAL-WHEN` is to include all of `(eval-when (:compile-toplevel :load-toplevel :execute) ... )`
+
+You must use `(eval-when (:compile-toplevel :load-toplevel :execute) ...)` whenever you define types, classes, constants, variables, etc., that are going to be used in macros.
+
+It is usually an error to omit the `:execute`, because it prevents `LOAD`ing the source rather than the fasl. It is usually an error to omit the `:load-toplevel` (except to modify e.g. readtables and compile-time settings), because it prevents `LOAD`ing future files or interactively compiling code that depends on the effects that happen on compile-time, unless the current file was `COMPILE-FILE`d within the same Lisp session.
+
+Regarding variables, note that because macros may or may not be expanded in the same process that runs the expanded code, you must not depend on compile-time and runtime effects being either visible or invisible at the other time. There are still valid uses of variables in macros:
+
+* Some variables may hold dictionaries for some new kind of definition and other meta-data. If such meta-data is to be visible at runtime and/or in other files, you must make sure that the macro expands into code that will register the definitions to those meta-data structures at load-time, in addition to effecting the registration at compile-time. Typically, your top-level definitions expand to code that does the registration. If your code doesn't expand at the top-level, you can sometimes use `LOAD-TIME-VALUE` for good effect. In extreme cases, you may have to use `ASDF-FINALIZERS:EVAL-AT-TOPLEVEL`.
+* Some variables may hold temporary data that is only used at compile-time in the same file, and can be cleaned up at the end of the file's compilation. Some predefined examples include `*readtable*` or compiler-internal variables holding the current optimization settings. You can often manage existing and new such variables using the `:AROUND-COMPILE` hooks of `ASDF`.
