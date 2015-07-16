@@ -1097,7 +1097,7 @@ You should not use `(format nil "~A" value)`; you should use `PRINC-TO-STRING` i
 
 You should use `~<Newline>` or `~@<Newline>` in format strings to keep them from wrapping in 100-column editor windows, or to indent sections or clauses to make them more readable.
 
-You should not use `STRING-UPCASE` on `STRING-DOWNCASE` on format control parameters; instead, it should use `"~:@(~A~)"` or `"~(~A~)"`.
+You should not use `STRING-UPCASE` or `STRING-DOWNCASE` on format control parameters; instead, it should use `"~:@(~A~)"` or `"~(~A~)"`.
 
 Be careful when using the `FORMAT` condition directive. The parameters are easy to forget.
 
@@ -1118,3 +1118,4 @@ Be careful when using the `FORMAT` condition directive. The parameters are easy 
   Use the number of arguments to format as the number to choose a clause. The same as no parameters in all other ways. Here's the full hairy example:
 
   `"Items:~#[ none~; ~S~; ~S and ~S~:;~@{~#[~; and~] ~S~^ ,~}~]."`
+
