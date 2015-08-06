@@ -15,7 +15,7 @@
 	(t (@ (prototype object) property-name))))))
 
 (defun (setf @) (value object property-name)
-  (setf (gethash property-name (properties object))
-	(if (null value) +removed+ value)))
+  (setf (gethash property-name (properties object)) value))
 
-
+(defun remove@ (object property-name)
+  (setf (@ object property-name) +removed+))
