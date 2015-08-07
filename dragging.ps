@@ -1,6 +1,7 @@
 (in-package :ps)
 
 (defvar *last-mouse-position*)
+(defvar *dragging*)
 
 (defun -point (&rest coordinates)
   (setf (@ this coordinates) (array))
@@ -52,16 +53,24 @@
   (incf (@ element style top) (chain delta (y))))
 
 
-(funcall
- (@ document add-event-listener)
- "load"
- (lambda ()
-   (funcall (@ console log)
-	    "Hello!")))
+(defmacro add-listener (element event &body body)
+  `(funcall (@ ,element add-event-listener)
+	    ,event
+	    (lambda (event)
+	      ,@body)))
 
-(funcall
- (@ document add-event-listener)
- "mousemove"
- (lambda (event)
-   (funcall (@ console log)
-	    (delta-mouse event))))
+(defun output (arg) (funcall (@ console log) arg))
+
+(add-listener document "mousedown"
+	      (setf *dragging* (@ event target))
+	      (output "starting drag")
+	      (output *dragging*))
+
+(add-listener document "mouseup"
+	      (setf *dragging* undefined)
+	      (funcall (@ console log) "stopping drag"))
+
+(add-listener document "mousemove"
+	      (let ((delta (delta-mouse event)))
+		(when *dragging*
+		  (shift *dragging* delta))))
