@@ -1,5 +1,7 @@
 (in-package :ps)
 
+(defvar *last-mouse-position*)
+
 (defun -point (&rest coordinates)
   (setf (@ this coordinates) (array))
   (dotimes (i (length (@ coordinates)))
@@ -29,10 +31,37 @@
 ;;; TODO 2015-08-07 williamyaoh@gmail.com
 ;;;  - maybe add bounds checking
 (defmacro define-coordinate-accessor (name dimension)
-  `(defun ,name (point)
-     (aref (@ point coordinates) ,dimension)))
+  `(setf (@ -point prototype ,name)
+	 (lambda () (aref (@ this coordinates) ,dimension))))
 
 (define-coordinate-accessor x 0)
 (define-coordinate-accessor y 1)
 (define-coordinate-accessor z 2)
 
+(defun delta-mouse (mouse-event)
+  (let ((new-point (new (-point (@ mouse-event page-x)
+				(@ mouse-event page-y)))))
+    (let ((vector (if *last-mouse-position*
+		      (point-subtract new-point *last-mouse-position*)
+		      (new (-point 0 0)))))
+      (setf *last-mouse-position* new-point)
+      vector)))
+
+(defun shift (element delta)
+  (incf (@ element style left) (chain delta (x)))
+  (incf (@ element style top) (chain delta (y))))
+
+
+(funcall
+ (@ document add-event-listener)
+ "load"
+ (lambda ()
+   (funcall (@ console log)
+	    "Hello!")))
+
+(funcall
+ (@ document add-event-listener)
+ "mousemove"
+ (lambda (event)
+   (funcall (@ console log)
+	    (delta-mouse event))))
