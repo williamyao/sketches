@@ -1,0 +1,38 @@
+(in-package :ps)
+
+(defun -point (&rest coordinates)
+  (setf (@ this coordinates) (array))
+  (dotimes (i (length (@ coordinates)))
+    (setf (aref (getprop this 'coordinates) i)
+	  (aref coordinates i))))
+
+(defun point-make (coordinate-array)
+  (let ((new-point (new (-point))))
+    (dotimes (i (length coordinate-array))
+      (setf (aref (@ new-point coordinates) i)
+	    (aref coordinate-array i)))
+    new-point))
+
+(defun point-negate (point)
+  (point-make (map (lambda (x) (- x)) (@ point coordinates))))
+
+;;; will truncate dimension to the dimension of the lower
+;;; dimension point; may want to change this
+(defun point-add (point1 point2)
+  (point-make (mapcar (lambda (x1 x2) (+ x1 x2))
+		      (@ point1 coordinates)
+		      (@ point2 coordinates))))
+
+(defun point-subtract (point1 point2)
+  (point-add point1 (point-negate point2)))
+
+;;; TODO 2015-08-07 williamyaoh@gmail.com
+;;;  - maybe add bounds checking
+(defmacro define-coordinate-accessor (name dimension)
+  `(defun ,name (point)
+     (aref (@ point coordinates) ,dimension)))
+
+(define-coordinate-accessor x 0)
+(define-coordinate-accessor y 1)
+(define-coordinate-accessor z 2)
+
