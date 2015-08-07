@@ -801,3 +801,498 @@ Regarding variables, note that because macros may or may not be expanded in the 
 
 * Some variables may hold dictionaries for some new kind of definition and other meta-data. If such meta-data is to be visible at runtime and/or in other files, you must make sure that the macro expands into code that will register the definitions to those meta-data structures at load-time, in addition to effecting the registration at compile-time. Typically, your top-level definitions expand to code that does the registration. If your code doesn't expand at the top-level, you can sometimes use `LOAD-TIME-VALUE` for good effect. In extreme cases, you may have to use `ASDF-FINALIZERS:EVAL-AT-TOPLEVEL`.
 * Some variables may hold temporary data that is only used at compile-time in the same file, and can be cleaned up at the end of the file's compilation. Some predefined examples include `*readtable*` or compiler-internal variables holding the current optimization settings. You can often manage existing and new such variables using the `:AROUND-COMPILE` hooks of `ASDF`.
+
+####Read-time Evaluation
+
+You should use `#.` sparingly, and you must avoid read-time side-effects.
+
+The `#.` standard read-macro will read one object, evaluate the objct, and have the reader return the resulting value.
+
+You must not use it where other idioms will do, such as using `EVAL-WHEN` to evaluate side-effects at compile-time, using a regular macro to retun an expression computed at compile-time, using `LOAD-TIME-VAUE` to compute it at load-time.
+
+Read-time evaluation is often used as a quick way to get something evaluated at compile-time (actually "read time" but it amounts to the same thing). If you use this, the evaluationa MUST NOT have any side effects and MUST NOT depend on any global variables. The `#.` should be treated as a way to force "constant-folding" that a sufficiently clever compiler could have figured out all by itself, when the compiler isn't sufficiently clever and the difference matters.
+
+Another use of `#.` is to expand the  equivalent of macros in places that are neither expressions nor (quasi)quotations, such as lambda lists. However, if you find yourself using it a lot, it might be time to instead define macros to replace your consumers of lambda-lists with something that recognizes an extension.
+
+Whenever you are going to use `#.`, you should consider using `DEFCONSTANT` and its variants, possibly in an `EVAL-WHEN`, to give the value a name explaining what it means.
+
+####EVAL
+
+You must not use `EVAL` at runtime.
+
+Places where it is actually appropriate to use `EVAL` are so few and far between that you must consult with your reviewers; it's easily misused.
+
+If your code manipulates symbols at runtime and needs to get the value of a symbol, use `SYMBOL-VALUE`, not `EVAL`.
+
+Often, what you really need to write is a macro, not to use `EVAL`.
+
+You may be tempted to use `EVAL` as a shortcut to evaluating expressions in a safe subset of the language. But it often requires more scrutiny to properly check and sanitize all possible inputs to such use of `EVAL` than to build a special-purpose evaluator. You may not use `EVAL` in this way at runtime.
+
+Places where it is OK to use `EVAL` are:
+
+* The implementation of an interactive development tool.
+* The build infrastructure.
+* Backdoors that are part of testing frameworks. (You MUST NOT have such backdoors in production code.)
+* Macros that fold consotants at compile-time.
+* Macros that register definitions to meta-data structures; the registration form is sometimes evaluated a compile-time as well as included in the macro-expansion, so it is immediately available to other macros.
+
+Note that in the latter case, if the macro isn't going to be used at the top-level, it might not be possible to make these definitions available as part of the expansion. The same phenomenon may happen in a `DEFTYPE` expansion, or in helper functions used by macros. In these cases, you may actually have to use `ASDF-FINALIZERS:EVAL-AT-TOPLEVEL` in your macro. It will not only `EVAL` your definitions at macro-expansion time for immediate availability, it will also save the form aside, for inclusion in a `(ASDF-FINALIZERS:FINAL-FORMS)` that you need to include at the end of the file being compiled (or before the form is needed). This way, the side-effects are present when loading the fasl without having compiled it as well as while compiling it; in either case, the form is made available at load-time. `ASDF-FINALIZERS` ensures that the form is present, by throwing an error if you omit it.
+
+####INTERN and UNINTERN
+
+You must not use `INTERN` or `UNINTERN` at runtime.
+
+You must not use `INTERN` at runtime. Not only does it cons, it either creates a permanent symbol that won't be collected or gives access to internal symbols. This creates opportunities for memory leaks, denial of service attacks, unauthorized access to internals, clashes with other symbols.
+
+You must not `INTERN` a string just to compare it to a keyword; use `STRING=` or `STRING-EQUAL`.
+
+```
+(member (intern str :keyword) $keys) ; Bad
+```
+
+```
+(member str $keys :test #'string-equal) ; Better
+```
+
+You must not use `UNINTERN` at runtime. It can break code that relies on dynamic binding. It makes things harder to debug. You must not dynamically intern any new symbol, and therefore you need not dynamically unintern anything.
+
+You may of course use `INTERN` at compile-time, in the implementation of some macros. Even so, it is usually more appropriate to use abstractions on top of it, such as `ALEXANDRIA:SYMBOLICATE` or `ALEXANDRIA:FORMAT-SYMBOL` to create the symbols you need.
+
+###Data Representation
+
+####NIL: empty-list, false, and I Don't Know
+
+Appropriately use or avoid using `NIL`.
+
+`NIL` can have separate different interpretations:
+
+* "False." In this case, use `NIL`. You should test for false `NIL` using the operator `NOT` or using the predicate function `NULL`.
+* "Empty-list." In this case, use `'()`. (Be careful about quoting the empty-list when callilng macros.) You should use `ENDP` to test for the empty list when the argument is known to be a proper list, or with `NULL` otherwise.
+* A statement about some value being unspecified. In this case, you may use `NIL` if there is no risk of ambiguity anywhere in your code; otherwise you should use an explicit, descriptive symbol.
+* A statement about some value being known not to exist. In this case, you should use an explicit, descriptive symbol instead of `NIL`.
+
+You must not introduce ambiguity in your data representation that will cause headaches for whoever has to debug code. If there is any risk of ambiguity, you should use an explicit, descriptive symbol or keyword for each case, instead of using `NIL` for either. If you do use `NIL`, you must make sure that the distinction is well documented.
+
+In many contexts, instead of representing "I don't know" as a particular value, you should instead use multiple values, one for the value that is known if any, and one to denote whether the value was known or found.
+
+When working with database classes, keep in mind that `NIL` need not always map to `'NULL'` (and vice-versa)! The needs of the database may differ from the needs of the Lisp.
+
+####Do Not Abuse Lists
+
+You must select proper data representation. You must not abuse the `LIST` data structure.
+
+Even though back in 1958, LISP was short for "LISt Processing", its successor Common Lisp has been a modern programming language with modern data structures since the 1980s. You must use the proper data structures in your programs.
+
+You must not abuse the builtin (single-linked) `LIST` data structure where it is not appropriate, even though Common Lisp makes it especially easy to use it.
+
+You must only use lists where their performance characteristics are appropriate for the algorithm at hand: sequential iteration over the entire contents of the list.
+
+An exception where it is appropriate to use lists is when it is known in advance that the size of the list will remain very short (say, less than 16 elements).
+
+List data structures are often (but not always) appropriate for macros and functions used by macros at compile-time: indeed, not only is source code passed as lists in Common Lisp, but the macro-expansion and compilation processes will typically walk over the entire source code, sequentially, once. (Note that advanced macro systems don't directly use lists, but instead use abstract syntax objects that track source code location and scope; however there is no such advanced macro system in Common Lisp at this time.)
+
+Another exception where it is appropriate to use lists is for introducing literal constants that will be transformed into more appropriate data structures at compile-time or load-time. It is a good idea to have a function with a relatively short name to build your program's data structures from such literals.
+
+In the many cases when lists are not the appropriate data structure, various libraries such as cl-containers or lisp-interface-library provide plenty of different data structures that should fulfill all the basic needs of your programs. If the existing libraries are not sufficient, see above about Using Libraries and Open-Sourcing Code.
+
+####Lists vs. Structures vs. Multiple Values
+
+You should use the appropriate representation for product types.
+
+You should using a list as anything besides a container of elements of like type. You must not use a list as a method of passing multiple separate values of different types in and out of function calls. Sometimes it is convenient to use a list as a little ad hoc structure, i.e. "the first element o the list is a FOO, and the second is a BAR," but this should be used minimally since it gets harder to remember the little convention. You must only use a list that way when destructuring the list of arguments from a function, or creating a list of arguments to which to `APPLY` a function.
+
+The proper  way to pass around an object comprising several values of heterogeneous types is to use a structure as defined by `DEFSTRUCT` or `DEFCLASS`.
+
+You should use multiple values only when functions return a small number of values that are meant to be destructured immediately by the caller, rather than passed together as arguments to further functions.
+
+You should not return a condition object as one of a set of multiple values. Instead, you should signal the condition to denote an unusual outcome.
+
+You should signal a condition to denote an unusual outcome, rather than relying on a special return type.
+
+####Lists vs. Pairs
+
+Use the appropriate functions when manipulating lists.
+
+Use `FIRST` to access the first element of a list, `SECOND` to access the second element, etc. Use `REST` to access the tail of a list. Use `ENDP` to test for the end of the list.
+
+Use `CAR` and `CDR` when the cons cell is not being used to implement a proper list and is instead being treated as a pair of more general objects. Use `NULL` to test for `NIL` in this context.
+
+The latter case should be rare outside of alists, since you should be using structures and classes where they apply, and data structure libraries when you want trees.
+
+Exceptionally, you may use `CDADR` and ot her variants on lists when manually destructuring them, instead of using a combination of several list accessor functions. In this context, using `CAR` and `CDR` instead of `FIRST` and `REST` also makes sense. However, keep in mind that it might be more appropriate in such cases to use higher-level constructs such as `DESTRUCTURING-BIND` or `OPTIMA:MATCH`.
+
+####Lists vs. Arrays
+
+You should use arrays rather than lists where random access matters.
+
+`ELT` has *O(n)* behavior when used on lists. If you are to use random access on an object, use arrays and `AREF` instead.
+
+The exception is for code outside the critical path where the list is known to be small instead.
+
+####Lists vs. Sets
+
+You should only use lists as sets for very small lists.
+
+Using lists are representations of sets if a bad idea unless you know the lists will be small, for accessors are *O(n)* instead of *O(log n)*. For arbitrary big sets, used balanced binary trees, for instance using `lisp-interface-library`.
+
+If you still use lists as sets, you should not `UNION` lists just to search them.
+
+```
+(member foo (union list-1 list-2)) ; Bad
+```
+
+```
+(or (member foo list-1) (member foo list-2)) ; Better
+```
+
+Indeed, `UNION` not only conses unnecessarily, but it can be *O(n^2)* on some implementations, and is rather slow even when it's *O(n)*.
+
+###Proper Forms
+
+You must follow the proper usage regarding well-known functions, macros, and special forms.
+
+####Defining Constants
+
+You must use proper defining forms for constant values.
+
+The Lisp system we primarily use, SBCL, is very picky and signals a condition whenever a constant is redefined to a value not `EQL` to its previous setting. You must not use `DEFCONSTANT` when defining variables that are not numbers, characters, or symbols (including booleans and keywords). Instead, consistently use whicever alternative is recommended for your project.
+
+```
+;; Bad
+(defconstant +google-url+ "http://www.google.com")
+(defconstant +valid-colors+ '(red green blue))
+```
+
+Open-Source libraries may use `ALEXANDRIA:DEFINE-CONSTANT` for constants other than numbers, characters and symbols (including booleans and keywords). You may use the `:TEST` keyword argument to specify an equality predicate.
+
+```
+;; Better, for Open-Source code:
+(define-constant +google-url+ "http://www.google.com/" :test #'string=)
+(define-constant +valid-colors+ '(red green blue))
+```
+
+Note that with optimizing implementations, such as SBCL or CMUCL, defining constants this way precludes any later redefinition short of `UNINTERN`ing the symbol and recompiling all its clients. This may make it "interesting" to debug things at the REPL or to deploy live code upgrades. If there is a chance that your "constants" are not going to be constant over the lifetime of your server processes after taking into consideration scheduled and unscheduled code pathces, you should consider using `DEFPARAMETER` or `DEFVAR` instead, or possibly a variant of `DEFINE-CONSTANT` that builds upon some future library implementing global lexicals rather than `DEFCONSTANT`. You may keep the `+plus+` convention in these cases to document the intent of the parameter as a constant.
+
+Also note that `LOAD-TIME-VALUE` may help you avoid the need for defined constants.
+
+####Defining Functions
+
+You should make proper use of `&OPTIONAL` and `&KEY` arguments. You should not use `&AUX` arguments.
+
+You should avoid using `&ALLOW-OTHER-KEYS`, since it blurs the contract of a function. Almost any real function (generic or not) allows a certain fixed set of keywords, as far as its caller is concerned, and those are part of its contract. If you are implementing a method of a generic function, and it does not need to know the values of some of the keyword arguments, you should explicitly `(DECLARE (IGNORE ...))` all the arguments that you are not using. You must not use `&ALLOW-OTHER-KEYS` unless you explicitly want to disabled checking of allowed keys for all methods when invoking the generic function on arguments that match this particular method. Note that the contract of a generic function belongs in the `DEFGENERIC`, not in the `DEFMETHOD` which is basically an "implementation detail" of the generic function as far as the caller of the generic is concerned.
+
+A case where `&ALLOW-OTHER-KEYS` is appropriate is when you write a wrapper function to some other functions that may vary (within the computation or during development), and pass around a plist as a `&REST` argument.
+
+You should avoid using `&AUX` arguments.
+
+You should avoid having both `&OPTIONAL` and `&KEY` arguments, unelss it never makes sense to specify keyword arguments when the optional arguments are not all specified. You must not have non-`NIL` defaults to your `&OPTIONAL` arguments when your function has both `&OPTIONAL` and `&KEY` arguments.
+
+For maximum portability of a library, it is good form that `DEFMETHOD` definitions should `(DECLARE (IGNORABLE ...))` all the required arguments that they are not using. Indeed, some implementations will issue a warning if you `(DECLARE (IGNORE ...))` those arguments, whereas other implementations will issue a warning if you fail to `(DECLARE (IGNORE ...))` them. `(DECLARE (IGNORABLE ...))` works on all implementations.
+
+You should avoid excessive nesting of binding forms inside a function If your function ends up with massive nesting, you should probably break it up into several functions or macros. If it is really a single conceptual unit, consider using a macro such as `FARE-UTILS:NEST` to at least reduce the amount of indentation required. It is bad form to use `NEST` in typical short functions with 4 or fewer levels of nesting, but also bad form not to use it in the exceptionally long functions with 10 or more levels of nesting. Use your judgment and consult your reviewers.
+
+####Conditional Expressions
+
+Use the appropriate condition form.
+
+Use `WHEN` and `UNLESS` when there is only one alternative. Use `IF` when there are two alternatives and `COND` when there are several.
+
+However, don't use `PROGN` for an `IF` clause -- use `COND`, `WHEN`, or `UNLESS`.
+
+Note that in Common Lisp, `WHEN` and `UNLESS` return `NIL` when the condition is not met. You may take advantage of it. Nevertheless, you may use an `IF` to explicitly return `NIL` if you have a specific reason to insist on the return value. You may similarly include a fall-through clause `(t nil)` as the lasta in your `COND`, or `(otherwise nil)` as the last in your `CASE`, to insist on the fact that the value returned by the conditional matters and that such a case is going to be used. You should omit the fall-through clause when the conditional is used for side-effects.
+
+You should prefer `AND` and `OR` when it leads to more concise code than using `IF`, `COND`, `WHEN`, or `UNLESS`, and there are no side-effects involved. You may also use an `ERROR` as a side-effect in the final clause of an `OR`.
+
+You should only use `CASE` and `ECASE` to compare numbers, characters, or symbols (including booleans and keywords). Indeed, `CASE` uses `EQL` for comparisons, so strings, pathnames, and structures may not compare the way you expect, and `1` will differ from `1.0`.
+
+You should use `ECASE` and `ETYPECASE` in preference to `CASE` and `TYPECASE`. It is better to catch erroneous values early.
+
+You should not use `CCASE` or `CTYPECASE` at all. At least, you should not use them in server processes, unless you have quite robust error handling infrastructure and make sure not to leak sensitive data this way. These are meant for interactive use, and can cause interesting damage if they cause data or control to leak to attackers.
+
+You must not use gratuitous single quotes in `CASE` forms. This is a common error:
+
+```
+(case x ; Bad: silently returns NIL on mismatch
+  ('bar :bar) ; Bad: catched QUOTE
+  ('baz :baz)) ; Bad: also would catch QUOTE
+```
+
+```
+(ecase x ; Better: will error on mismatch
+  ((bar) :bar) ; Better: won't match QUOTE
+  ((baz) :baz)) ; Better: same reason
+```
+
+`'BAR` there is `(QUOTE BAR)`, meaning this leg of the case will be executed if `X` is `QUOTE`... and ditto for the second leg (though `QUOTE` will be caught by the first clause). This is unlikely to be what you really want.
+
+In `CASE` forms, you must use `otherwise` instead of `t` when you mean "execute this clause if the others fail". You must use `((t) ..) when you mean "match the symbol T" rather than "match anything". You must also use `((nil) ..)` when you mean "match the symbol `NIL`" rather than "match nothing".
+
+Therefore, if you want to map boolean `NIL` and `T` to respective symbols `:BAR` and `:QUUX`, you should avoid the former way and do it the latter way:
+
+```
+(ecase x ; Bad: has no actual error case!
+  (nil :bar) ; Bad: matches nothing
+  (t :quuz)) ; Bad: matches anything
+```
+
+```
+(ecase x ; Better: will actually catch non-booleans
+  ((nil) :bar) ; Better: matches NIL
+  ((t) :quux)) ; Better: matches T
+```
+
+####Identity, Equality, and Comparisons
+
+You should use the appropriate predicates when comparing objects.
+
+Lisp provides four general equality predicates: `EQ`, `EQL`, `EQUAL`, and `EQUALP`, which subtly vary in semantics. Additionally, Lisp provides the type-specific predicates `=`, `CHAR=`, `CHAR-EQUAL`, `STRING=`, and `STRING-EQUAL`. Know the distinction!
+
+You should use `EQL` to compare objects and symbols for *identity*.
+
+You must not use `EQ` to compare numbers and characters. Two numbers or characters that are `EQL` are not required by Common Lisp to be `EQ`.
+
+When choosing between `EQ` and `EQL`, you should use `EQL` unless you are writing performance-critical low-level code. `EQL` reduced the opportunity for a class of embarrassing errors (i.e. if numbers or characters are ever compared). There may be a tiny performance cost relative to `EQ`, although under SBCL, it often compiles away entirely. `EQ` is equivalent to `EQL` and type declarations, and use of it for optimization should be treated just like any such unsafe operations.
+
+You should use `CHAR=` for case-dependent character comparison, and `CHAR-EQUAL` for case-ignoring character comparisons.
+
+You should use `STRING=` for case-dependent string comparisons, and `STRING-EQUAL` for case-ignoring string comparisons.
+
+A common mistake when using `SEARCH` on strings is to provide `STRING=` or `STRING-EQUAL` as the `:TEST` function. The `:TEST` function is given two sequence elements to compare. If the sequences are strings, the `:TEST` function is called on two characters, so the correct tests are `CHAR=` or `CHAR-EQUAL`. If you use `STRING=` or `STRING-EQUAL`, the result is what you expect, but in some Lisp implementations it's much slower. CCL (at least as of 8/2008) creates a one-character string upon each comparison, for example, which is very expensive.
+
+Also, you should use `:START` and `:END` arguments to `STRING=` or `STRING-EQUAL` instead of using `SUBSEQ`; e.g. `(string-equal (subseq s1 2 6) s2)` should instead be `(string-equal s1 s2 :start1 2 :end1 6)`. This is preferable because it does not cons.
+
+You should use `ZEROP`, `PLUSP`, or `MINUSP`, instead of comparing a value to `0` or `0.0`.
+
+You must not use exact comparison on floating point numbers, since the vague nature of floating point arithmetic can produce little "errors" in numeric value. You should compare absolute values to a threshold.
+
+You must use `=` to compare numbers, unless you really mean to `0`, `0.0` and `-0.0` to compare unequal, in which case you should use `EQL`. Then again, you must not usually use exact comparison on floating point numbers.
+
+Monetary amounts should be using decial (rational) numbers to avoid the complexities and rounding errors of floating-point arithmetic. Libraries such as wu-decimal may help you; once again, if this library is not satisfactory, see above about Using Libraries and Open-Sourcing Code.
+
+####Iteration
+
+Use the appropriate form for iteration.
+
+You should use simpler forms such as `DOLIST` or `DOTIMES` instead of loop in simple cases when you're not going to use any of the `LOOP` facilities such as bindings, collection, or block return.
+
+Use the `WITH` clause of `LOOP` when it will avoid a level of nesting with `LET`. You may use `LET` if it makes it clearer to return one of the bound variables after the `LOOP`, rather than use a clumsy `FINALLY (RETURN ...)` form.
+
+In the body of a `DOTIMES`, do not set the iteration variable. (CCL will issue a compiler warning if you do.)
+
+Most systems use unadorned symbols in the current package as `LOOP` keywords. Other systems use actual `:keywords` from the `KEYWORD` package as `LOOP` keywords. You must be consistent with the contention used in your system.
+
+####I/O
+
+Use the appropriate I/O functions.
+
+When writing a server, code must not send output to the standrad streams such as `*STANDARD-OUTPUT*` or `*ERROR-OUTPUT*`. Instead, code must use the proper logging framework to output messages for debugging. We are running as a server, so there is no console!
+
+Code must not use `PRINT-OBJECT` to communicate with a user -- `PRINT-OBJECT` is for debugging purposes only. Modifying any `PRINT-OBJECT` method must not break any public interfaces.
+
+You should not use a sequence of `WRITE-XXX` where a single `FORMAT` string could be used. Using `FORMAT` allowed you to parameterize the format control string in the future if the need arises.
+
+You should use `WRITE-CHAR` to emit a character rather than `WRITE-STRING` to emit a single-character string.
+
+You should not use `(format nil "~A" value)`; you should use `PRINC-TO-STRING` instead.
+
+You should use `~<Newline>` or `~@<Newline>` in format strings to keep them from wrapping in 100-column editor windows, or to indent sections or clauses to make them more readable.
+
+You should not use `STRING-UPCASE` or `STRING-DOWNCASE` on format control parameters; instead, it should use `"~:@(~A~)"` or `"~(~A~)"`.
+
+Be careful when using the `FORMAT` condition directive. The parameters are easy to forget.
+
+* No parameters, e.g. `"~[Siamese~;Manx~;Persian~] Cat"`
+
+  Take one format argument, which should be an integer. Use it to choose a clause. Clause numbers are zero-based. If the number is out of range, just print nothing. You can provide a default value by putting a `:` in front of the last `~;`. E.g. in `"~[Siamese~;Manx~;Persian~:;Alley~] Cat"`, an out-of-range arg prints `"Alley"`.
+
+* `:` parameters, e.g. `"~:[Siamese~;Manx~]"`
+
+  Take one format argument. If it's `NIL`, use the first clause, otherwise use the second clause.
+
+* `@` parameters, e.g. `"~@[Siamese ~a~]"`
+
+  If the next format argument is true, use the choice, but do NOT take the argument. If it's false, take one argument and print nothing. (Normally the clause uses the format argument.)
+
+* `#` parameter, e.g. `"~#[ none~; ~s~; ~s and ~s~]"`
+
+  Use the number of arguments to format as the number to choose a clause. The same as no parameters in all other ways. Here's the full hairy example:
+
+  `"Items:~#[ none~; ~S~; ~S and ~S~:;~@{~#[~; and~] ~S~^ ,~}~]."`
+
+###Optimization
+
+####Avoid Allocation
+
+You should avoid unnecessary allocation of memory.
+
+In a language with automatic storage management (such as Lisp or Java), the colloquial phrase "memory leak" refers to a situation where storage that is not actually needed nevertheless does not get deallocated, because it is still reachable.
+
+You should be careful that when you create objects, you don't leave them reachable after they are no longer needed!
+
+Herre's a particular trap-for-the-unwary in Common Lisp. If you make an array with a fill pointer, and put objects in it, and then set the fill pointer back to zero, those objects are still reachable as far as Lisp goes (the Common Lisp spec says that's it's still OK to refer to the array entries past the end of the fill pointer).
+
+Don't cons (i.e., allocate) unnecessarily. Garbage collection is not magic. Excessive allocation is usually a performance problem.
+
+####Unsafe Operations
+
+You must only use faster unsafe operations when there is a clear performance need and you can document why it's correct.
+
+Common Lisp implementations often provide backdoors to compute some operations faster in an unsafe way. For instance, some libraries provide arithmetic oeprations that are designed to be used with fixnums only, and yield the correct result faster if provided proper arguments. The downside is that the result of such operations is incorrect in case of overflow, and can have undefined behavior when called with anything but fixnums.
+
+More generally, unsafe operations will yield the correct result faster than would the equivalent safe operation if the arguments satisfy some invariant such as being of the correct type and small enough; however if the arguments fail to satisfy the required invariants, then the operation may have undefined behavior, such as crashing the software, or, which is sometimes worse, silently giving wrong answers. Depending on whether the software is piloting an aircraft or other life-critical device, or whether it is accounting for large amounts of money, such undefined bheavior can kill or bankrupt people. Yet proper speed can sometimes make the difference between software that's unusably slow and software that does its job, or between software that is a net loss and software than can yield a profit.
+
+You must not define or use unsafe operations without both profiling results indicating the need for this optimization, and careful documentation explaining why it is safe to use them. Unsafe operations should be restricted to internal functions; you should carefully document how unsafe it is to use these functions with the wrong arguments. You should only use unsafe operations inside functions internal to a package and you should document the use of the declarations, since calling the functions with arguments of the wrong type can lead to undefined behavior. Use `CHECK-TYPE` in functions exported from a package to sanitize input arguments, so that internal functions are never passed illegal values.
+
+On some compilers, new unsafe operations can usually be defined by combining type declarations with an `OPTIMIZE` declaration that has sufficiently high `SPEED` and low `SAFETY`. In addition to providing more speed for production code, such declarations may be more helpful than `CHECK-TYPE` assertions for finding bugs at compile-time, on compilers that have type inference. These compilers may interpret those declarations as assertions if you switch to safer and slower optimize settings; this is good to locate a dynamic error in your code during development, but is not to be used for production code since it defeats the purpose of declarations as a performance trick.
+
+####DYNAMIC-EXTENT
+
+You should only use `DYNAMIC-EXTENT` where it matters for performance, and you can document why it is correct.
+
+`DYNAMIC-EXTENT` declarations are a particular case of unsafe operations.
+
+The purpose of a `DYNAMIC-EXTENT` declaration is to improve performance by reducing garbage collection in cases where it appears to be obvious that an object's lifetime is within the "dynamic extent" of a function. That means the object is created at some point after the function is called, and the object is always inaccessible after the function exits by any means.
+
+By declaring a variable or a local function `DYNAMIC-EXTENT`, the programmer *asserts* to Lisp that any object that is ever a value of that variable or the closure that is the definition of a function has a lifetime within the dynamic extent of the (innermost) function that declares the variable.
+
+The Lisp implementation is then free to use that information to make the program faster. Typically, Lisp implementations can take advantage of this knowledge to stack-allocate:
+
+* The lists created to store `&REST` parameters.
+* Lists, vectors and structures allocated within a function.
+* Closures.
+
+If the assertion is wrong, i.e. if the programmer's claim is not true, the results can be *catastrophic*: Lisp can terminate any time after the function returns, or it can hang forever, or -- worst of all -- it can produce incorrect results without any runtime error!
+
+Even if the assertion is correct, future changes to the function might introduce a violation of the assertion. This increases the danger.
+
+In most cases, such objects are ephemeral. Modern Lisp implementations use generational garbage collectors, which are quite efficient under these circumstances.
+
+Therefore, `DYNAMIC-EXTENT` declarations should be used sparingly. You must only use them if:
+
+1. There is some good reason to think that the overall effect of performance is noticeable, and
+2. It is absolutely clear that the assertion is true.
+3. It is quite unlikely that the code will be changed in ways that cause the declaration to become false.
+
+Point (1) is a special case of the principle of avoiding premature optimization. An optimization like this only matters if such objects are allocated at a very high rate, e.g. "inside an innert loop".
+
+Note that it is relatively easy to ascertain that a function will not escape the dynamic extent of the current call frame by analyzing where the function is called and what other functions it is passed to; therefore, you should somewhat be wary of declaring a function `DYNAMIC-EXTENT`, but this is not a high-stress declaration. On the other hand, it is much harder to ascertain that none of the objects ever bound or assigned to that variable and none of their sub-objects will escape the dynamic extent of the current call frame, and that they still won't be in any future modification of a function. Therefore, you should be extremely ware of declaring a variable `DYNAMIC-EXTENT`.
+
+It's usually hard to predict the effect of such optimization on performace. When writing a function or macro that is part of a library of reusable code, there's no a priori way to know how often the code will run. Ideally, tools would be available to discover the availability and suitability of using such an optimization based on running simulations and test cases, but in practice this isn't as easy as it ought to be. It's a tradeoff. If you're very, very sure that the assertion is true (that any object bound to the variable and any of its sub-objects are only used within the dynamic extent of the specified scope), and it's not obvious how much time will be saved and it's not easy to measure, then it may be better to put in the declaration than to leave it out. (Ideally it would be easier to make such measurements than it actually is.)
+
+####REDUCE vs. APPLY
+
+You should use `REDUCE` instead of `APPLY` where appropriate.
+
+You should use `REDUCE` isntead of `APPLY` and a consed-up lists, where the semantics of the first operator argument otherwise guaranteees the same semantics. Of course, you must use `APPLY` if it does what you want and `REDUCE` doesn't. For instance:
+
+```
+;; Bad
+(apply #'+ (mapcar #'acc frobs))
+```
+
+```
+;; Better
+(reduce #'+ frobs :key #'acc :initial-value 0)
+```
+
+This is preferable because it does not do extra consing, and does not risk going beyond `CALL-ARGUMENTS-LIMIT` on implementations where that limit is small, which could blow away the stack on long lists (we want to avoid gratuitous non-portability in our code).
+
+However, you must be careful not to use `REDUCE` in ways that needlessly increase the complexity class of the computation. For instance, `(REDUCE 'STRCAT ...)` is *O(n^2)* when an appropriate implementation is only *O(n)*. Moreover, `(REDUCE 'APPEND ...)` is also *O(n^2)* unless you specify `:FROM-END T`. In such cases, you MUST NOT use `REDUCE`, and you MUST NOT use `(APPLY 'STRCAT) ...) or `(APPLY 'APPEND ...)` either. Instead you MUST use proper abstractions from a suitable library (that you may have to contribute to) that properly handles those cases without burdening users with implementation details. See for instance `UIOP:REDUCE/STRCAT`.
+
+####Avoid NCONC
+
+You should not use `NCONC`; you should use `APPEND` instead, or better, better data structures.
+
+You should almost never use `NCONC`. You should use `APPEND` when you don't depend on any side-effect. You should use `ALEXANDRIA:APPENDF` when you need to update a variable. You should probably not depend on games being played with the `CDR` of the current cons cell (which some might argue is suggested but not guaranteed by the specification); if you do, you must include a prominent comment explaining the use of `NCONC`; and you should probably reconser your data representation strategy.
+
+By extension, you could avoid `MAPCAN` or the `NCONC` feature of `LOOP`. You should instead respectively use `ALEXANDRIA:MAPPEND` and the `APPEND` feature of `LOOP`.
+
+`NCONC` is very seldom a good idea, since its time complexity is no better than `APPEND`, its space complexity class also is no better than `APPEND` in the common case where no one else is sharing the side-effected list, and its bug complexity class is way higher than `APPEND`.
+
+If the small performance hit due to `APPEND` vs. `NCONC` is a limiting factor in your program, you have a big problem and are probably using the wrong data structure; you should be using sequences with constant-time append (see Okasaki's book, and add them to `lisp-interface-library`), or more simply you should be accumulating data in a tree that will get flattened once in linear time after the accumulation phase is complete.
+
+You may only use `NCONC`, `MAPCAN` or the `NCONC` feature of `LOOP` in low-level functions where performance matters, where the use of lists as a data structure has been vetted because these lists are known to be short, and when the function or expression the result of which are accumulated explicitly promises in its contract that it only reutnrs fresh lists (in particular, it can't be a constant quote or backquote expression). Even then, the use of such primitives must be rare, and accompanied by justifying documentation.
+
+###Pitfalls
+
+#### #'FUN vs 'FUN
+
+You should usually refer to a function as `#'FUN` rather than `'FUN`.
+
+The former, which reads as `(FUNCTION FUN)`, refers to the function object, and is lexically scoped. The latter, which reads as `(QUOTE FUN)`, refers to the symbol, which when called uses the global `FDEFINITION` of the symbol.
+
+When using functions that take a functional argument (e.g., `MAPCAR`, `APPLY`, `:TEST` and `:KEY` arguments), you should use the `#'` to refer to the function, not just single quote.
+
+An exception is when you explicitly want dynamic linking, because you anticipate that the global function binding will be updated.
+
+Another exception is when you explicitly want to access a global function binding, and avoid a possible shadowing lexical binding. This shouldn't happen often, as it is usally a bad idea to shadow a function when you will want to use the shadowed function; just use a different name for the lexical function.
+
+You must consistenly use either `#'(lambda ...)` or `(lambda ...)` without `#'` everywhere. Unlike the case of `#'symbol` vs `'symbol`, it is only a syntactic different with no semantic impact, except that the former works on Genera and the latter doesn't. You must use the former style if your code is intended as a library with maximal compatibility to all Common Lisp implementations; otherewise, it is optional which style you use. `#'` may be seen as a hint that you're introducing a function in expression context; but the `lambda` itself is usually sufficient hint, and concision is good. Choose wisely, but above all, consistently with yourself and other developers, within the same file, package, system, project, etc.
+
+Note that if you start writing a new style in a heavily functional style, you may consider using lambda-reader, a system that lets you use the unicode character λ instead of `LAMBDA`. But you must not start using such a syntactic extension in an existing system without getting permission from other developers.
+
+####Pathnames
+
+Common Lisp pathnames are tricky. Be aware of pitfalls. Use `UIOP`.
+
+It is surprisingly hard to properly deal with pathnames in Common Lisp.
+
+`ASDF 3` comes with a portability library `UIOP` that makes it *much* easier to deal with pathnames portably -- and correctly -- in Common Lisp. You should use it when appropriate.
+
+First, be aware of the discrepancies between the syntax of Common Lisp pathnames, which depends on which implementation and operating system you are using, and the native syntax of pathnames on your operating system. The Lisp syntax may involve quoting of special characters such as `#\.` and `#\*` etc., in addition to the quoting of `#\\` and `#\"` within strings. By contrast, your operating system's other system programming languages (shell, C, scripting languages) may only have one layer of quoting, into strings.
+
+Second, when using `MERGE-PATHNAMES`, be wary of the treatment of the `HOST` component, which matters a lot on non-Unix platforms (and even on some Unix implementations). You probably should be using `UIOP:MERGE-PATHNAMES*` or `UIOP:SUBPATHNAME` instead of `MERGE-PATHNAMES`, especially if your expectations for relative pathnames are informed by the way they work in Unix or Windows; otherweise you might hit weird bugs whereby on some implementations, merging a relative pathname with an absolute pathname results in overriding the absolute pathname's host and replacing it with the host from the value of `*DEFAULT-PATHNAME-DEFAULTS*` at the time the relative pathname was created.
+
+Third, be aware the `DIRECTORY` is not portable across implementations in how it handles wildcards, sub-directories, symlinks, etc. There again, `UIOP` provides several common abstractions to deal with pathnames, but only does so good a job. For a complete portable solution, use IOLib -- though its Windows support lags behind.
+
+`LOGICAL-PATHNAME`s are not a portable abstraction, and should not be used in portable code. Many implementations have bugs in them, when they are supported at all. SBCL supports them very well, but strictly enforces the limitations on characters allowed by the standard, which restricts their applicability. Other implementations allow arbitrary characters in such pathnames, but in doing so are not being conformant, and are still incompatible with each other in many ways. You should use other pathname abstractions, such as `ASDF:SYSTEM-RELATIVE-PATHNAME` or the underlying `UIOP:SUBPATHNAME` and `UIOP:PARSE-UNIX-NAMESTRING``.
+
+Finally, be aware that paths may change between the time you build the Lisp image for your application, and the time you run the application from its image. You should be careful to reset your image to forget irrelevent build-time paths and reinitialize any search path from the current environment variable. `ASDF`, for instance, requires you to reset its paths with `UIOP:CLEAR-CONFIGURATION`. `UIOP` provides hooks to call functions before an image is dumped, from which to reset or `MAKUNBOUND` relevant variables.
+
+####SATISFIES
+
+You must be careful when using a `SATISFIES` clause in a type specifier.
+
+Most Common Lisp implementations can't optimize based on a `SATISFIES` type, but many of them offer simple optimizations based on a type of the form `(AND FOO (SATISFIES BAR-P))` where the first term of the `AND` clause described the structure of the object without any `SATISFIES` and the second term is the `SATISFIES`.
+
+```
+(deftype prime-number () (satisfies prime-number-p)) ; Bad
+```
+
+```
+(deftype prime-number () (and integer (satisfies prime-number-p))) ; Better
+```
+
+However, `AND` in the `DEFTYPE` language doesn't isn't a left-to-right short-circuit operator as in the expression language; it is a symmetrical connector that allows for reordering subterms and doesn't guarantee short-circuiting. Therefore, in the above example, you cannot rely on the test for `INTEGER`ness to protect the function `PRIME-NUMBER-P` from being supplied non-integer arguments to test for being instances of the type. Implementations may, and some *will*, invoke `SATIFIES`-specified function at compile-time to test various relevant objects.
+
+That is why any function specified in a `SATISFIES` clause MUST accept objects of any type as argument to the function, and MUST be defined within an `EVAL-WHEN` (as well as any variable is uses or function it calls):
+
+```
+(defun prime-number-p (n) ; Doubly bad!
+  (let ((m (abs n)))
+    (if (<= m *prime-number-cutoff*)
+        (small-prime-number-p m)
+        (big-prime-number-p m))))
+```
+
+```
+(eval-when (:compile-toplevel :load-toplevel :execute) ; Better
+  (defun prime-number-p (n)
+    (when (integerp n) ; Better
+      (let ((m (abs n)))
+        (if (<= m *prime-number-cutoff*)
+           (small-prime-number-p m)
+           (big-prime-number-p m))))))
+```
+
+In particular, the above means that the example used in the Common Lisp Standard is erroneous: `(and integer (satisfies evenp))` is *not* a safe, conformant type specifier to use, because `EVENP` will throw an error rather than return `NIL` when passed a non-integer as an argument.
+
+Finally, there is a catch when your `DEFTYPE` code expands to a `SATISFIES` with a dynamically generated function:
+
+* You cannot control when implementations will or will not expand a `DEFTYPE`.
+* The expansion itself cannot contain a function definition or any code in the expression language.
+* You cannot control when the expansion is used, it may happen in a different process that didn't expand the definition.
+
+Therefore, you cannot merely create the function as a side-effect of expansion using `EVAL` at type-expansion time. The solution is to use `ASDF-FINALIZERS:EVAL-AT-TOPLEVEL` instead. See the very last point in the discussion about `EVAL`.
+
+Common Lisp is hard to satisfy.
