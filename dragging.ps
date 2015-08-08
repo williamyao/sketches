@@ -48,6 +48,8 @@
       (setf *last-mouse-position* new-point)
       vector)))
 
+;;; TODO 2015-08-08 williamyaoh@gmail.com
+;;;  - css is dumb, change this to pixels
 (defun shift (element delta)
   (incf (@ element style left) (chain delta (x)))
   (incf (@ element style top) (chain delta (y))))
