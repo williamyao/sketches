@@ -28,6 +28,12 @@
 	  do (unless (eql value +removed+)
 	       (setf (@ new-object key) value)))))
 
+;;; as an odd consequence of the way they're written,
+;;; COPY, COPY-WITH, PROTOTYPE, and PROTOTYPE-WITH
+;;; all return empty objects when called with a unary NIL.
+
+;;; a useful idiom for shortening the creation of new
+;;; objects...?
 (defun copy (object)
   "Return a newly-created `object' based on OBJECT and its prototype
 chain. All properties are newly set; the returned `object' will not see
