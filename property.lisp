@@ -44,12 +44,17 @@ specified slots set to the specified values."
 	  do (setf (@ new-object key) value))
     new-object))
 
+(defun prototype (object)
+  "Return a newly-created `object' that prototypes from
+OBJECT."
+  (make-instance 'object :prototype object))
+
 (defun prototype-with (object &rest keys-and-values)
   "Return a newly-created `object' with the specified slots set to
 the specified values, with its PROTOTYPE set to OBJECT i.e. the
 returned object will see changes in the input object and its
 prototype chain."
-  (let ((new-object (make-instance 'object :prototype object)))
+  (let ((new-object (prototype object)))
     (loop for (key value) on keys-and-values by #'cddr
 	  do (setf (@ new-object key) value))
     new-object))
