@@ -19,3 +19,37 @@
 
 (defun remove@ (object property-name)
   (setf (@ object property-name) +removed+))
+
+(defun %copy (object new-object)
+  (when object
+    (%copy (prototype object) new-object)
+    (loop for key being each hash-key of (properties object)
+	    using (hash-value value)
+	  do (unless (eql value +removed+)
+	       (setf (@ new-object key) value)))))
+
+(defun copy (object)
+  "Return a newly-created `object' based on OBJECT and its prototype
+chain. All properties are newly set; the returned `object' will not see
+changes in the copied `object' or its prototype chain."
+  (let ((new-object (make-instance 'object)))
+    (%copy object new-object)
+    new-object))
+
+(defun copy-with (object &rest keys-and-values)
+  "Return a newly-created `object' as by COPY, but with the
+specified slots set to the specified values."
+  (let ((new-object (copy object)))
+    (loop for (key value) on keys-and-values by #'cddr
+	  do (setf (@ new-object key) value))
+    new-object))
+
+(defun prototype-with (object &rest keys-and-values)
+  "Return a newly-created `object' with the specified slots set to
+the specified values, with its PROTOTYPE set to OBJECT i.e. the
+returned object will see changes in the input object and its
+prototype chain."
+  (let ((new-object (make-instance 'object :prototype object)))
+    (loop for (key value) on keys-and-values by #'cddr
+	  do (setf (@ new-object key) value))
+    new-object))
