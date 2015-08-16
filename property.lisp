@@ -6,6 +6,9 @@
   ((prototype :accessor prototype :initarg :prototype :initform nil)
    (properties :accessor properties :initform (make-hash-table :test 'equal))))
 
+(defmacro defobject (name prototype &body slots-and-values)
+  )
+
 (defun @ (object property-name)
   (when object
     (let ((property (gethash property-name (properties object))))
