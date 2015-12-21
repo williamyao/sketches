@@ -1,0 +1,62 @@
+;;;; A place to put things that I need, or that I think
+;;;; I'll need, but don't really fit anywhere else.
+;;;; A lot of these are stolen from other languages.
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun mklist (obj)
+    "Place OBJ into a one-item list, if it's not already a list."
+    (if (listp obj) obj (list obj))))
+
+(defun partial (fn &rest args)
+  "Return a new function by currying FN with ARGS."
+  (if (null args)
+      fn
+      (lambda (&rest args2) (apply fn (append args args2)))))
+
+(defun comp/2 (fn1 fn2)
+  "Return the compose of two functions."
+  (lambda (x) (funcall fn1 (funcall fn2 x))))
+
+(defun comp (fn &rest fns)
+  "Return the compose of an arbitrary number of functions."
+  (labels ((comp* (acc fns)
+             (if (null fns)
+                 acc
+                 (comp* (comp/2 (first fns) acc)
+                        (rest fns)))))
+    (let ((fns (reverse (cons fn fns))))
+      (comp* (first fns) (rest fns)))))
+
+(defun foldl (fn init seq)
+  "Accumulate a value of type INIT by continuously calling FN on
+   the accumulator and successive values of SEQ. Tail recursive."
+  (if (null seq)
+      init
+      (foldl fn (funcall fn init (first seq)) (rest seq))))
+
+(defun foldr (fn init seq)
+  "Return a value of type INIT by recursively calling FN on
+   INIT and values of SEQ, starting from the right of SEQ."
+  (if (null seq)
+      init
+      (funcall fn (foldr fn init (rest seq)) (first seq))))
+
+(defun flip (fn)
+  "Return a new binary function that does the same thing as FN, but
+   with the argument order flipped."
+  (lambda (x y) (funcall fn y x)))
+
+(defmacro -> (init &rest forms)
+  "'Thread' return values through FORMS, starting with INIT.
+
+   Places each return value into the second position of the following form,
+   returning the value of the last form."
+  (let ((forms (mapcar #'mklist forms)))
+    (labels ((thread (forms)
+               (if (null forms)
+                   init
+                   (destructuring-bind (head &rest tail) (first forms)
+                     `(,head ,(thread (rest forms)) ,@tail)))))
+      (if (not (every #'identity forms))
+          (error "Erroneous NIL in -> body.")
+          (thread (reverse forms))))))
