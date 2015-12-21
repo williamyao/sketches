@@ -27,24 +27,43 @@
     (let ((fns (reverse (cons fn fns))))
       (comp* (first fns) (rest fns)))))
 
-(defun foldl (fn init seq)
-  "Accumulate a value of type INIT by continuously calling FN on
-   the accumulator and successive values of SEQ. Tail recursive."
-  (if (null seq)
-      init
-      (foldl fn (funcall fn init (first seq)) (rest seq))))
-
-(defun foldr (fn init seq)
-  "Return a value of type INIT by recursively calling FN on
-   INIT and values of SEQ, starting from the right of SEQ."
-  (if (null seq)
-      init
-      (funcall fn (foldr fn init (rest seq)) (first seq))))
-
 (defun flip (fn)
   "Return a new binary function that does the same thing as FN, but
    with the argument order flipped."
   (lambda (x y) (funcall fn y x)))
+
+(defgeneric foldl (fn init foldable)
+  (:documentation "Accumulate a value of type INIT by continuously calling FN on
+   the accumulator and successive values of SEQ. Tail recursive."))
+
+(defmethod foldl (fn init (seq list))
+  (if (null seq)
+      init
+      (foldl fn (funcall fn init (first seq)) (rest seq))))
+
+(defmethod foldl (fn init (seq vector))
+  (let ((length (length seq)))
+    (labels ((foldl* (acc index)
+               (if (= index length)
+                   acc
+                   (foldl* (funcall fn acc (aref seq index)) (+ index 1)))))
+      (foldl* init 0))))
+
+(defgeneric foldr (fn init foldable)
+  (:documentation "Return a value of type INIT by recursively calling FN on
+   INIT and values of SEQ, starting from the right of SEQ."))
+
+(defmethod foldr (fn init (seq list))
+  (if (null seq)
+      init
+      (funcall fn (first seq) (foldr fn init (rest seq)))))
+
+(defmethod foldr (fn init (seq vector))
+  (labels ((foldr* (acc index)
+             (if (minusp index)
+                 acc
+                 (foldr* (funcall fn (aref seq index) acc) (- index 1)))))
+    (foldr* init (- (length seq) 1))))
 
 (defmacro -> (init &rest forms)
   "'Thread' return values through FORMS, starting with INIT.
