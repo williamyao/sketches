@@ -71,11 +71,25 @@
    Places each return value into the second position of the following form,
    returning the value of the last form."
   (let ((forms (mapcar #'mklist forms)))
-    (labels ((thread (forms)
+    (labels ((thread (acc forms)
                (if (null forms)
-                   init
+                   acc
                    (destructuring-bind (head &rest tail) (first forms)
-                     `(,head ,(thread (rest forms)) ,@tail)))))
+                     (thread `(,head ,acc ,@tail) (rest forms))))))
       (if (not (every #'identity forms))
           (error "Erroneous NIL in -> body.")
-          (thread (reverse forms))))))
+          (thread init forms)))))
+
+(defmacro ->> (init &rest forms)
+  "'Thread' return values through FORMS, starting with INIT.
+
+   Places each return value into the last position of the following form,
+   returning the value of the last form."
+  (let ((forms (mapcar #'mklist forms)))
+    (labels ((thread (acc forms)
+               (if (null forms)
+                   acc
+                   (thread `(,@(first forms) ,acc) (rest forms)))))
+      (if (not (every #'identity forms))
+          (error "Erroneous NIL in ->> body.")
+          (thread init forms)))))
