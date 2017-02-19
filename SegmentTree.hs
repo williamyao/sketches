@@ -1,6 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
-import Data.Monoid
+import Data.Semigroup
 import qualified Data.Sequence as S
 
 type Range = (Int, Int)
@@ -31,40 +31,112 @@ rangeOverlap (l1, r1) (l2, r2)
 --   element in any given range of that list is, in O(lg n) time, once
 --   we've constructed a segment tree.
 data SegmentTree a
-  = Empty
+  = Leaf Range a
   | Node Range (SegmentTree a) a (SegmentTree a)
   deriving (Eq, Show)
 
-segmentMin :: Monoid a => SegmentTree a -> a
-segmentMin Empty = mempty
+segmentMin :: Semigroup a => SegmentTree a -> a
+segmentMin (Leaf _ x) = x
 segmentMin (Node _ _ x _) = x
 
 -- | O(n). Construct a segment tree out of the given monoid.
-construct :: forall a. Monoid a => [a] -> SegmentTree a
-construct l = construct' (0, S.length sl - 1)
-  where construct' :: Monoid a => Range -> SegmentTree a
+--   List of elements must be nonempty.
+construct :: forall a. Semigroup a => [a] -> SegmentTree a
+construct xs = construct' (0, length sx - 1)
+  where construct' :: Semigroup a => Range -> SegmentTree a
         construct' s@(l, r)
-          | l > r     = Empty
-          | l == r    = Node (l, r) Empty (lookup' l sl) Empty
+          | l > r = undefined  -- should never happen if input is nonempty
+          | l == r = Leaf s (sx ! l)
           | otherwise =
             let m = rangeMid s
-                (cl, cr) = (construct' (l, m), construct' (m+1, r))
-            in Node (l, r) cl (segmentMin cl <> segmentMin cr) cr
+                (f, b) = (construct' (l, m), construct' (m+1, r))
+            in Node s f (segmentMin f <> segmentMin b) b
 
-        lookup' :: Int -> S.Seq a -> a
-        lookup' n s =
-          let (Just x) = S.lookup n s in x
+        sx :: S.Seq a
+        sx = S.fromList xs
 
-        sl :: S.Seq a
-        sl = S.fromList l
+        (!) :: S.Seq a -> Int -> a
+        s ! i = (\(Just x) -> x) $ S.lookup i s
 
--- | O(lg n). Return the result of folding the monoid over a given
---   range. Warning: May not do reasonable things, if given a range that's
---   not a valid range of the original sequence!
-query :: Monoid a => SegmentTree a -> Range -> a
-query Empty _ = mempty
-query (Node s1 f x b) s2 =
-  case rangeOverlap s1 s2 of
-    Disjoint -> mempty
-    Contained -> x
-    Overlapped -> query f s2 <> query b s2
+-- | O(lg n). Query a range of the original sequence to find the result
+--   of folding the semigroup's operator over that given range.
+query :: Semigroup a => SegmentTree a -> Range -> a
+query t s = (\(Just x) -> x) $ query' t s
+  where query' :: Semigroup a => SegmentTree a -> Range -> Maybe a
+        query' (Leaf s1 x) s2 =
+          case rangeOverlap s1 s2 of
+            Disjoint -> Nothing
+            Contained -> Just x
+        query' (Node s1 f x b) s2 =
+          case rangeOverlap s1 s2 of
+            Disjoint -> Nothing
+            Contained -> Just x
+            Overlapped -> query' f s2 <> query' b s2
+
+{-
+   To see the correctness of the following definition of toList, consider
+   this easier-to-understand, but inefficient version of toList:
+
+   > toList :: SegmentTree a -> [a]
+   > toList (Leaf _ x) = [x]
+   > toList (Node _ f _ b) = toList f ++ toList b
+
+   This is obviously correct, but O(n^2). So we want to
+   optimize this. Can we add an accumulator? Let's define an
+   auxilliary function which can take another list as a parameter.
+
+   > toList' :: SegmentTree a -> [a] -> [a]
+   > toList' t l = toList t ++ l
+
+   We can plainly see that toList t = toList' t [].
+
+   Now, by expanding toList' into its two cases based on whether or not
+   the tree is a leaf or a node, and applying fold-unfold to remove the
+   instances of toList within the definitions:
+
+   toList' (Leaf _ x) l = toList (Leaf _ x) ++ l
+                        = [x] ++ l
+                        = x : l
+
+   toList' (Node _ f _ b) l = toList (Node _ f _ b) ++ l
+                            = toList f ++ toList b ++ l
+                            = toList f ++ (toList' b l)
+                            = toList' f (toList' b l)
+
+   We're simply substituting the calls to toList with its conditional
+   definitions, and then substituting calls to toList to calls to toList'
+   by the simple definition of toList' above. Both of these are valid
+   substitutions, since we're in a purely functional language.
+
+   Therefore our new definition of toList below is equivalent to the naive
+   version. QED
+
+   What's the running time of toList'? Let T(n) be the time taken to run
+   toList' on a segment tree with n nodes.
+
+     T(n) = 2T(n/2) + O(1),
+
+   since we know that the segment tree is balanced because we constructed it
+   that way. Well, Master theorem away, and we get T(n) = O(n). QED
+-}
+
+-- | O(n). Get back the original elements of the sequence used to
+--   construct the segment tree.
+toList :: SegmentTree a -> [a]
+toList t = toList' t []
+  where toList' :: SegmentTree a -> [a] -> [a]
+        toList' (Leaf _ x) l = x : l
+        toList' (Node _ f _ b) l = toList' f $ toList' b l
+
+-- | O(lg n). Update an element of the original sequence and return
+--   the augmented segment tree.
+--   Consequences are undefined if the given index is outside the range of
+--   the original sequence.
+update :: forall a. Semigroup a => Int -> a -> SegmentTree a -> SegmentTree a
+update i x t = update' t
+  where update' :: Semigroup a => SegmentTree a -> SegmentTree a
+        update' (Leaf s _) = Leaf s x
+        update' (Node s f y b) =
+          let (f', b') = if i <= rangeMid s then (update' f, b)
+                         else (f, update' b)
+          in Node s f' (segmentMin f' <> segmentMin b') b'
