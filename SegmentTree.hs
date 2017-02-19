@@ -39,6 +39,7 @@ segmentMin :: Monoid a => SegmentTree a -> a
 segmentMin Empty = mempty
 segmentMin (Node _ _ x _) = x
 
+-- | O(n). Construct a segment tree out of the given monoid.
 construct :: Monoid a => [a] -> SegmentTree a
 construct l = construct' (0, S.length sl - 1)
   where -- construct' :: Monoid a => Range -> SegmentTree a
@@ -56,6 +57,9 @@ construct l = construct' (0, S.length sl - 1)
 
         sl = S.fromList l
 
+-- | O(lg n). Return the result of folding the monoid over a given
+--   range. Warning: May not do reasonable things, if given a range that's
+--   not a valid range of the original sequence!
 query :: Monoid a => SegmentTree a -> Range -> a
 query Empty _ = mempty
 query (Node s1 f x b) s2 =
