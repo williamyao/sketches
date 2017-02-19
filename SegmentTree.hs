@@ -39,7 +39,7 @@ segmentMin :: SegmentTree a -> a
 segmentMin (Leaf _ x) = x
 segmentMin (Node _ _ x _) = x
 
--- | O(n). Construct a segment tree out of the given monoid.
+-- | O(n). Construct a segment tree out of the given list of semigroups.
 --   List of elements must be nonempty.
 construct :: forall a. Semigroup a => [a] -> SegmentTree a
 construct xs = construct' (0, length sx - 1)
