@@ -136,7 +136,7 @@ update :: forall a. Semigroup a => Int -> a -> SegmentTree a -> SegmentTree a
 update i x t = update' t
   where update' :: Semigroup a => SegmentTree a -> SegmentTree a
         update' (Leaf s _) = Leaf s x
-        update' (Node s f y b) =
+        update' (Node s f _ b) =
           let (f', b') = if i <= rangeMid s then (update' f, b)
                          else (f, update' b)
           in Node s f' (segmentMin f' <> segmentMin b') b'
