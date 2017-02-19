@@ -35,7 +35,7 @@ data SegmentTree a
   | Node Range (SegmentTree a) a (SegmentTree a)
   deriving (Eq, Show)
 
-segmentMin :: Semigroup a => SegmentTree a -> a
+segmentMin :: SegmentTree a -> a
 segmentMin (Leaf _ x) = x
 segmentMin (Node _ _ x _) = x
 
